@@ -1,0 +1,130 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+
+@theme {
+    --font-sans: 'Trebuchet MS', 'Aptos', 'Segoe UI', sans-serif;
+    --color-brand-rose: #e91572;
+    --color-brand-deep: #9d0049;
+    --color-brand-soft: #fff2f7;
+    --color-brand-blush: #ffe4ef;
+    --color-brand-ink: #1c1423;
+    --color-brand-orange: #ff9c2f;
+}
+
+@layer base {
+    body {
+        @apply min-h-screen bg-[#fff6f9] text-slate-900 antialiased;
+        background-image: radial-gradient(circle at top right, rgba(233, 21, 114, 0.08), transparent 28%), radial-gradient(circle at bottom left, rgba(255, 156, 47, 0.08), transparent 24%);
+    }
+
+    h1,
+    h2,
+    h3,
+    h4 {
+        @apply tracking-tight text-slate-950;
+    }
+
+    input,
+    select,
+    textarea {
+        @apply outline-none;
+    }
+}
+
+@layer components {
+    .shell {
+        @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+    }
+
+    .market-card {
+        @apply rounded-[28px] border border-white/70 bg-white shadow-[0_18px_50px_rgba(233,21,114,0.10)];
+    }
+
+    .glass-card {
+        @apply rounded-[24px] border border-white/50 bg-white/80 backdrop-blur;
+    }
+
+    .hero-surface {
+        background:
+            linear-gradient(135deg, rgba(157, 0, 73, 0.95), rgba(233, 21, 114, 0.92) 48%, rgba(247, 86, 146, 0.9)),
+            radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.18), transparent 30%),
+            radial-gradient(circle at 85% 10%, rgba(255, 255, 255, 0.15), transparent 22%);
+        @apply rounded-[38px] border border-white/20 text-white shadow-[0_30px_80px_rgba(157,0,73,0.35)];
+    }
+
+    .topbar-link {
+        @apply inline-flex items-center gap-2 text-sm font-semibold text-white/95 transition hover:text-white;
+    }
+
+    .btn-primary {
+        @apply inline-flex items-center justify-center rounded-full bg-[var(--color-brand-rose)] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_35px_rgba(233,21,114,0.28)] transition hover:bg-[var(--color-brand-deep)];
+    }
+
+    .btn-secondary {
+        @apply inline-flex items-center justify-center rounded-full bg-[var(--color-brand-orange)] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_12px_26px_rgba(255,156,47,0.28)] transition hover:brightness-95;
+    }
+
+    .btn-outline {
+        @apply inline-flex items-center justify-center rounded-full border border-[var(--color-brand-rose)] bg-white px-5 py-2.5 text-sm font-semibold text-[var(--color-brand-rose)] transition hover:bg-[var(--color-brand-soft)];
+    }
+
+    .section-title {
+        @apply text-3xl font-black sm:text-4xl;
+    }
+
+    .section-kicker {
+        @apply text-sm font-bold uppercase tracking-[0.35em] text-[var(--color-brand-rose)];
+    }
+
+    .category-tile {
+        @apply flex flex-col items-center gap-3 rounded-[26px] border border-[#ffd6e5] bg-[#fefbfc] p-4 text-center shadow-[0_10px_25px_rgba(233,21,114,0.08)] transition hover:-translate-y-1 hover:border-[var(--color-brand-rose)] hover:bg-white;
+    }
+
+    .promo-tile {
+        @apply overflow-hidden rounded-[28px] border border-[#ffd3e3] bg-white shadow-[0_14px_35px_rgba(233,21,114,0.10)];
+    }
+
+    .input-shell {
+        @apply w-full rounded-full border border-white/30 bg-white px-4 py-3 text-slate-900 shadow-[0_10px_25px_rgba(28,20,35,0.10)] placeholder:text-slate-400;
+    }
+
+    .field {
+        @apply w-full rounded-2xl border border-[#ffd2e4] bg-white px-4 py-3 text-sm text-slate-900 shadow-[0_8px_18px_rgba(233,21,114,0.08)] focus:border-[var(--color-brand-rose)];
+    }
+
+    .table-shell {
+        @apply overflow-hidden rounded-[24px] border border-[#ffd6e5] bg-white shadow-[0_14px_35px_rgba(233,21,114,0.08)];
+    }
+
+    .table-shell table {
+        @apply min-w-full text-sm;
+    }
+
+    .table-shell th {
+        @apply bg-[var(--color-brand-soft)] px-4 py-3 text-left font-semibold text-slate-700;
+    }
+
+    .table-shell td {
+        @apply border-t border-[#ffe1ec] px-4 py-3 align-top text-slate-700;
+    }
+
+    .fade-in {
+        animation: fadeInUp 0.5s ease both;
+    }
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
