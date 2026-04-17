@@ -60,6 +60,10 @@
         @apply inline-flex items-center gap-2 text-sm font-semibold text-white/95 transition hover:text-white;
     }
 
+    .topbar-signup {
+        @apply inline-flex items-center justify-center whitespace-nowrap rounded-full bg-white px-4 py-2 text-sm font-semibold text-brand-deep shadow-[0_10px_24px_rgba(28,20,35,0.22)] transition hover:bg-[#ffe8f2];
+    }
+
     .btn-primary {
         @apply inline-flex items-center justify-center rounded-full bg-[var(--color-brand-rose)] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_35px_rgba(233,21,114,0.28)] transition hover:bg-[var(--color-brand-deep)];
     }
@@ -110,6 +114,15 @@
 
     .table-shell td {
         @apply border-t border-[#ffe1ec] px-4 py-3 align-top text-slate-700;
+    }
+
+    /* Admin panel section nav — explicit colors so pills stay readable (Tailwind scan + contrast). */
+    .admin-hub-pill {
+        @apply inline-flex items-center justify-center rounded-full border border-[var(--color-brand-rose)] bg-white px-4 py-2 text-sm font-semibold text-[var(--color-brand-rose)] shadow-sm transition hover:bg-[var(--color-brand-soft)];
+    }
+
+    .admin-hub-pill--active {
+        @apply border-[var(--color-brand-rose)] bg-[var(--color-brand-rose)] text-white shadow-[0_8px_20px_rgba(233,21,114,0.25)] hover:bg-[var(--color-brand-deep)];
     }
 
     .fade-in {

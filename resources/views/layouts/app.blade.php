@@ -3,13 +3,14 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ $title ?? 'Varsity Market' }}</title>
+    <title>{{ $title ?? 'eSawel' }}</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 @php
     $navCategories = \App\Models\Category::query()->where('is_active', true)->whereNull('parent_id')->orderBy('sort_order')->take(10)->get();
-    $wishlistCount = auth()->check() ? auth()->user()->wishlistItems()->count() : 0;
-    $cartCount = auth()->check() ? auth()->user()->cart?->items()->count() ?? 0 : 0;
+    $shoppingDisabled = auth()->check() && auth()->user()->isShoppingDisabled();
+    $wishlistCount = auth()->check() && ! $shoppingDisabled ? auth()->user()->wishlistItems()->count() : 0;
+    $cartCount = auth()->check() && ! $shoppingDisabled ? auth()->user()->cart?->items()->count() ?? 0 : 0;
     $compareCount = count(session('compare_products', []));
 @endphp
 <body>
@@ -58,19 +59,27 @@
                 </form>
             </div>
 
-            <nav class="ml-auto flex items-center gap-3 text-sm font-semibold">
-                <a href="{{ route('compare.index') }}" class="topbar-link">Compare <span class="rounded-full bg-white/15 px-2 py-1 text-xs">{{ $compareCount }}</span></a>
+            <nav class="ml-auto flex flex-wrap items-center gap-3 text-sm font-semibold">
                 @auth
+                    @if ($shoppingDisabled)
+                        <a href="{{ route('seller.dashboard') }}" class="topbar-signup">Seller Panel</a>
+                        <a href="{{ route('seller.products.index') }}" class="topbar-link">My products</a>
+                    @else
+                        <a href="{{ route('compare.index') }}" class="topbar-link">Compare <span class="rounded-full bg-white/15 px-2 py-1 text-xs">{{ $compareCount }}</span></a>
+                    @endif
                     <a href="{{ route('account.dashboard') }}" class="topbar-link">Profile</a>
-                    <a href="{{ route('wishlist.index') }}" class="topbar-link">Wishlist <span class="rounded-full bg-white/15 px-2 py-1 text-xs">{{ $wishlistCount }}</span></a>
-                    <a href="{{ route('cart.index') }}" class="topbar-link">Cart <span class="rounded-full bg-white/15 px-2 py-1 text-xs">{{ $cartCount }}</span></a>
+                    @unless ($shoppingDisabled)
+                        <a href="{{ route('wishlist.index') }}" class="topbar-link">Wishlist <span class="rounded-full bg-white/15 px-2 py-1 text-xs">{{ $wishlistCount }}</span></a>
+                        <a href="{{ route('cart.index') }}" class="topbar-link">Cart <span class="rounded-full bg-white/15 px-2 py-1 text-xs">{{ $cartCount }}</span></a>
+                    @endunless
                     <form action="{{ route('logout') }}" method="POST" class="inline">
                         @csrf
                         <button type="submit" class="topbar-link">Log Out</button>
                     </form>
                 @else
+                    <a href="{{ route('compare.index') }}" class="topbar-link">Compare <span class="rounded-full bg-white/15 px-2 py-1 text-xs">{{ $compareCount }}</span></a>
                     <a href="{{ route('login') }}" class="topbar-link">Log In</a>
-                    <a href="{{ route('register') }}" class="rounded-full bg-white px-4 py-2 text-brand-rose">Sign Up</a>
+                    <a href="{{ route('register') }}" class="topbar-signup">Sign Up</a>
                 @endauth
             </nav>
         </div>
@@ -94,8 +103,8 @@
             <div>
                 <p class="text-sm font-black uppercase tracking-[0.18em] text-slate-500">Contact</p>
                 <div class="mt-3 space-y-2 text-sm text-slate-700">
-                    <p>Address: 123 Main Road, Dhaka 1207, Bangladesh</p>
-                    <p>Phone: +880 1900 000000</p>
+                    <p>Address: Uttara, Dhaka 1207, Bangladesh</p>
+                    <p>Phone: +880 1913474094</p>
                     <p>Email: support@esawel.com</p>
                 </div>
             </div>

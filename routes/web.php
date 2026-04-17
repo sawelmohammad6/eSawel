@@ -73,6 +73,7 @@ Route::prefix('seller')
         Route::get('/products/{product}/edit', [SellerController::class, 'editProduct'])->name('products.edit');
         Route::post('/products', [SellerController::class, 'storeProduct'])->name('products.store');
         Route::put('/products/{product}', [SellerController::class, 'updateProduct'])->name('products.update');
+        Route::delete('/products/{product}', [SellerController::class, 'destroyProduct'])->name('products.destroy');
         Route::get('/orders', [SellerController::class, 'ordersIndex'])->name('orders.index');
         Route::patch('/orders/items/{orderItem}', [SellerController::class, 'updateOrderItem'])->name('orders.update');
         Route::get('/payouts', [SellerController::class, 'payoutsIndex'])->name('payouts.index');
@@ -93,6 +94,7 @@ Route::prefix('admin')
         Route::get('/brands', [AdminController::class, 'brandsIndex'])->name('brands.index');
         Route::post('/brands', [AdminController::class, 'storeBrand'])->name('brands.store');
         Route::put('/brands/{brand}', [AdminController::class, 'updateBrand'])->name('brands.update');
+        Route::delete('/brands/{brand}', [AdminController::class, 'destroyBrand'])->name('brands.destroy');
 
         Route::get('/products', [AdminController::class, 'productsIndex'])->name('products.index');
         Route::get('/products/{product}/edit', [AdminController::class, 'editProduct'])->name('products.edit');

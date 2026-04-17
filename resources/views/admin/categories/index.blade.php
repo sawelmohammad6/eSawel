@@ -2,6 +2,7 @@
 
 @section('content')
     <section class="shell">
+        @include('partials.admin-hub')
         <div class="grid gap-8 xl:grid-cols-[380px_1fr]">
             <div class="market-card p-6">
                 <p class="section-kicker">Catalog</p>

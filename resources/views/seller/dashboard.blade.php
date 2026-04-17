@@ -5,6 +5,7 @@
         <div class="mb-6">
             <p class="section-kicker">Seller Panel</p>
             <h1 class="section-title">Shop Dashboard</h1>
+            <p class="mt-3 max-w-3xl text-sm text-slate-600">Add products and set stock here. After approval, they appear to buyers. You <strong>don’t buy</strong> stock through the store—customers order from you, and you fulfill from <a href="{{ route('seller.orders.index') }}" class="font-semibold text-brand-rose underline">Orders</a>.</p>
         </div>
 
         <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

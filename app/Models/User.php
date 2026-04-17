@@ -103,6 +103,15 @@ class User extends Authenticatable
         return $this->role === 'seller';
     }
 
+    /**
+     * Sellers manage inventory in Seller Panel; they do not use customer cart/checkout.
+     * Admins may still browse and test the storefront.
+     */
+    public function isShoppingDisabled(): bool
+    {
+        return $this->isSeller() && ! $this->isAdmin();
+    }
+
     public function isCustomer(): bool
     {
         return $this->role === 'customer';

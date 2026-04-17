@@ -4,6 +4,8 @@
     @php
         $formAction = $editingProduct ? route('seller.products.update', $editingProduct) : route('seller.products.store');
         $imageUrls = $editingProduct ? $editingProduct->images->pluck('path')->implode("\n") : '';
+        $selectedCategoryId = old('category_id', $editingProduct->category_id ?? null);
+        $selectedBrandId = old('brand_id', $editingProduct->brand_id ?? null);
     @endphp
 
     <section class="shell">
@@ -11,30 +13,56 @@
             <div class="market-card p-6">
                 <p class="section-kicker">Seller Catalog</p>
                 <h1 class="mt-2 text-3xl font-black">{{ $editingProduct ? 'Edit Product' : 'Add Product' }}</h1>
+                <p class="mt-3 text-sm text-slate-600">Choose a <strong class="text-slate-800">category</strong> and optional <strong class="text-slate-800">brand</strong> from the catalog created in the admin panel. You cannot add new categories or brands here.</p>
 
-                <form action="{{ $formAction }}" method="POST" class="mt-6 space-y-4">
+                <form action="{{ $formAction }}" method="POST" enctype="multipart/form-data" class="mt-6 space-y-4">
                     @csrf
                     @if ($editingProduct)
                         @method('PUT')
                     @endif
                     <input class="field" type="text" name="name" value="{{ old('name', $editingProduct->name ?? '') }}" placeholder="Product name">
                     <input class="field" type="text" name="sku" value="{{ old('sku', $editingProduct->sku ?? '') }}" placeholder="SKU">
-                    <select class="field" name="category_id">
-                        @foreach ($categories as $category)
-                            <option value="{{ $category->id }}" @selected(old('category_id', $editingProduct->category_id ?? '') == $category->id)>{{ $category->name }}</option>
-                        @endforeach
-                    </select>
-                    <select class="field" name="brand_id">
-                        <option value="">No brand</option>
-                        @foreach ($brands as $brand)
-                            <option value="{{ $brand->id }}" @selected(old('brand_id', $editingProduct->brand_id ?? '') == $brand->id)>{{ $brand->name }}</option>
-                        @endforeach
-                    </select>
+
+                    <div>
+                        <label for="seller-category" class="mb-1 block text-sm font-bold text-slate-800">Category <span class="font-normal text-red-600">*</span></label>
+                        <select id="seller-category" class="field" name="category_id" required @disabled($categories->isEmpty())>
+                            <option value="" @selected($selectedCategoryId === null || $selectedCategoryId === '')>Select a category…</option>
+                            @forelse ($categories as $category)
+                                @php
+                                    $label = $category->parent
+                                        ? $category->parent->name.' › '.$category->name
+                                        : $category->name;
+                                @endphp
+                                <option value="{{ $category->id }}" @selected((string) $selectedCategoryId === (string) $category->id)>{{ $label }}</option>
+                            @empty
+                                <option value="" disabled>No categories yet — ask an admin to add categories</option>
+                            @endforelse
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="seller-brand" class="mb-1 block text-sm font-bold text-slate-800">Brand <span class="text-xs font-normal text-slate-500">(optional)</span></label>
+                        <select id="seller-brand" class="field" name="brand_id">
+                            <option value="">No brand</option>
+                            @foreach ($brands as $brand)
+                                <option value="{{ $brand->id }}" @selected((string) $selectedBrandId === (string) $brand->id)>{{ $brand->name }}</option>
+                            @endforeach
+                        </select>
+                        @if ($brands->isEmpty())
+                            <p class="mt-1 text-xs text-amber-700">No brands are active yet. You can still save the product and add a brand later, or ask an admin to add brands.</p>
+                        @endif
+                    </div>
                     <textarea class="field min-h-28" name="short_description" placeholder="Short description">{{ old('short_description', $editingProduct->short_description ?? '') }}</textarea>
                     <textarea class="field min-h-36" name="description" placeholder="Full description">{{ old('description', $editingProduct->description ?? '') }}</textarea>
                     <textarea class="field min-h-24" name="specifications_text" placeholder="Specifications, one per line">{{ old('specifications_text', $editingProduct ? implode("\n", $editingProduct->specifications ?? []) : '') }}</textarea>
                     <textarea class="field min-h-24" name="attributes_text" placeholder="Options, one per line">{{ old('attributes_text', $editingProduct ? implode("\n", $editingProduct->attributes ?? []) : '') }}</textarea>
-                    <textarea class="field min-h-24" name="image_urls" placeholder="Image URLs, one per line">{{ old('image_urls', $imageUrls) }}</textarea>
+
+                    <div>
+                        <label class="mb-1 block text-sm font-bold text-slate-800">Product images</label>
+                        <input class="field" type="file" name="images[]" accept="image/jpeg,image/png,image/webp,image/jpg" multiple>
+                        <p class="mt-1 text-xs text-slate-500">Upload JPG, PNG, or WebP (up to 4&nbsp;MB each). First image is the main photo. You can select several files at once.</p>
+                    </div>
+                    <textarea class="field min-h-24" name="image_urls" placeholder="Or paste image URLs, one per line (optional)">{{ old('image_urls', $imageUrls) }}</textarea>
 
                     <div class="grid grid-cols-2 gap-3">
                         <input class="field" type="number" step="0.01" name="base_price" value="{{ old('base_price', $editingProduct->base_price ?? '') }}" placeholder="Base price">
@@ -64,6 +92,7 @@
                         <tr>
                             <th>Product</th>
                             <th>Category</th>
+                            <th>Brand</th>
                             <th>Price</th>
                             <th>Stock</th>
                             <th>Approval</th>
@@ -82,11 +111,21 @@
                                         </div>
                                     </div>
                                 </td>
-                                <td>{{ $product->category?->name }}</td>
+                                <td>{{ $product->category?->name ?? '—' }}</td>
+                                <td>{{ $product->brand?->name ?? '—' }}</td>
                                 <td>Tk {{ number_format($product->effective_price, 0) }}</td>
                                 <td>{{ $product->stock_quantity }}</td>
                                 <td>{{ ucfirst($product->approval_status) }}</td>
-                                <td><a href="{{ route('seller.products.edit', $product) }}" class="font-semibold text-[var(--color-brand-rose)]">Edit</a></td>
+                                <td>
+                                    <div class="flex items-center gap-3">
+                                        <a href="{{ route('seller.products.edit', $product) }}" class="font-semibold text-brand-rose">Edit</a>
+                                        <form action="{{ route('seller.products.destroy', $product) }}" method="POST" onsubmit="return confirm('Delete this product?');">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="font-semibold text-red-600">Delete</button>
+                                        </form>
+                                    </div>
+                                </td>
                             </tr>
                         @endforeach
                     </tbody>

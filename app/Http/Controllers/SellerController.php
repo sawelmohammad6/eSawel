@@ -9,6 +9,7 @@ use App\Models\PayoutRequest;
 use App\Models\Product;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 class SellerController extends Controller
@@ -36,7 +37,12 @@ class SellerController extends Controller
     {
         return view('seller.products.index', [
             'products' => $request->user()->products()->with(['images', 'category', 'brand'])->latest()->paginate(10),
-            'categories' => Category::query()->where('is_active', true)->orderBy('name')->get(),
+            'categories' => Category::query()
+                ->where('is_active', true)
+                ->with('parent')
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(),
             'brands' => Brand::query()->where('is_active', true)->orderBy('name')->get(),
             'editingProduct' => null,
         ]);
@@ -48,7 +54,12 @@ class SellerController extends Controller
 
         return view('seller.products.index', [
             'products' => $request->user()->products()->with(['images', 'category', 'brand'])->latest()->paginate(10),
-            'categories' => Category::query()->where('is_active', true)->orderBy('name')->get(),
+            'categories' => Category::query()
+                ->where('is_active', true)
+                ->with('parent')
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(),
             'brands' => Brand::query()->where('is_active', true)->orderBy('name')->get(),
             'editingProduct' => $product->load('images'),
         ]);
@@ -79,6 +90,23 @@ class SellerController extends Controller
         $this->syncProductImages($product, $imageUrls);
 
         return redirect()->route('seller.products.index')->with('success', 'Product updated and queued for review.');
+    }
+
+    public function destroyProduct(Request $request, Product $product): RedirectResponse
+    {
+        abort_unless($product->seller_id === $request->user()->id, 403);
+
+        foreach ($product->images as $image) {
+            $path = (string) $image->path;
+
+            if (str_starts_with($path, '/storage/')) {
+                Storage::disk('public')->delete(str_replace('/storage/', '', $path));
+            }
+        }
+
+        $product->delete();
+
+        return back()->with('success', 'Product deleted successfully.');
     }
 
     public function ordersIndex(Request $request): View
@@ -170,9 +198,21 @@ class SellerController extends Controller
             'is_trending' => ['nullable', 'boolean'],
             'is_flash_deal' => ['nullable', 'boolean'],
             'image_urls' => ['nullable', 'string'],
+            'images' => ['nullable', 'array'],
+            'images.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
         ]);
 
         $imageUrls = preg_split('/\r\n|\r|\n/', trim((string) ($validated['image_urls'] ?? ''))) ?: [];
+        $uploadedImageUrls = collect($request->file('images', []))
+            ->filter()
+            ->map(function ($image): string {
+                $storedPath = $image->store('products', 'public');
+
+                return Storage::url($storedPath);
+            })
+            ->all();
+
+        $imageUrls = array_values(array_filter([...$uploadedImageUrls, ...$imageUrls]));
 
         $data = [
             'seller_id' => $sellerId,

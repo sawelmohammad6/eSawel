@@ -6,9 +6,11 @@
             <p class="section-kicker">Admin Panel</p>
             <h1 class="section-title">Marketplace Dashboard</h1>
         </div>
+        @include('partials.admin-hub')
         <div class="mb-6 flex flex-wrap gap-3">
             <a href="{{ route('admin.products.index') }}" class="btn-primary">Add / Manage Products</a>
             <a href="{{ route('admin.categories.index') }}" class="btn-outline">Add / Manage Categories</a>
+            <a href="{{ route('admin.brands.index') }}" class="btn-outline">Add / Manage Brands</a>
         </div>
 
         <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
