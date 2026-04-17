@@ -1,6 +1,6 @@
 # eSawel
 
-A Laravel multi-vendor e-commerce project built with Laravel.
+A multi-vendor e-commerce project built with Laravel.
 ## Stack
 
 - Laravel 12
