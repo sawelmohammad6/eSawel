@@ -7,6 +7,7 @@
     @endphp
 
     <section class="shell">
+        @include('partials.admin-hub')
         <div class="grid gap-8 xl:grid-cols-[430px_1fr]">
             <div class="market-card p-6">
                 <p class="section-kicker">Admin Catalog</p>

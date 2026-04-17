@@ -51,23 +51,34 @@
                     @endif
 
                     @auth
-                        <form method="POST" action="{{ route('cart.store', $product) }}" class="mt-8 space-y-4">
-                            @csrf
-                            <div class="flex items-center gap-3">
-                                <span class="text-sm font-bold uppercase tracking-[0.25em] text-slate-500">Quantity</span>
-                                <div class="flex items-center gap-2 rounded-full border border-[#ffd5e6] bg-white px-3 py-2">
-                                    <button class="rounded-full px-3 py-1 text-xl text-slate-500" type="button" data-qty-toggle="minus" data-qty-target="#product-qty">-</button>
-                                    <input id="product-qty" class="w-12 border-0 bg-transparent text-center font-semibold" type="number" min="1" name="quantity" value="1">
-                                    <button class="rounded-full px-3 py-1 text-xl text-slate-500" type="button" data-qty-toggle="plus" data-qty-target="#product-qty">+</button>
+                        @unless (auth()->user()->isShoppingDisabled())
+                            <form method="POST" action="{{ route('cart.store', $product) }}" class="mt-8 space-y-4">
+                                @csrf
+                                <div class="flex items-center gap-3">
+                                    <span class="text-sm font-bold uppercase tracking-[0.25em] text-slate-500">Quantity</span>
+                                    <div class="flex items-center gap-2 rounded-full border border-[#ffd5e6] bg-white px-3 py-2">
+                                        <button class="rounded-full px-3 py-1 text-xl text-slate-500" type="button" data-qty-toggle="minus" data-qty-target="#product-qty">-</button>
+                                        <input id="product-qty" class="w-12 border-0 bg-transparent text-center font-semibold" type="number" min="1" name="quantity" value="1">
+                                        <button class="rounded-full px-3 py-1 text-xl text-slate-500" type="button" data-qty-toggle="plus" data-qty-target="#product-qty">+</button>
+                                    </div>
+                                </div>
+
+                                <div class="flex flex-wrap gap-3">
+                                    <button class="btn-secondary" type="submit" formaction="{{ route('cart.buy_now', $product) }}">Buy Now</button>
+                                    <button class="btn-primary" type="submit">Add to Cart</button>
+                                    <button class="btn-outline" type="submit" formaction="{{ route('wishlist.toggle', $product) }}">Wishlist</button>
+                                </div>
+                            </form>
+                        @else
+                            <div class="mt-8 rounded-[24px] border border-[#ffd5e6] bg-white p-5">
+                                <p class="text-sm font-bold text-slate-800">You’re signed in as a seller</p>
+                                <p class="mt-2 text-sm text-slate-600">You don’t purchase inventory here—add products in Seller Panel. When customers buy, you’ll see orders under <strong>Seller Panel → Orders</strong>.</p>
+                                <div class="mt-4 flex flex-wrap gap-3">
+                                    <a href="{{ route('seller.products.index') }}" class="btn-primary">Add or edit products</a>
+                                    <a href="{{ route('seller.orders.index') }}" class="btn-outline">View sales orders</a>
                                 </div>
                             </div>
-
-                            <div class="flex flex-wrap gap-3">
-                                <button class="btn-secondary" type="submit" formaction="{{ route('cart.buy_now', $product) }}">Buy Now</button>
-                                <button class="btn-primary" type="submit">Add to Cart</button>
-                                <button class="btn-outline" type="submit" formaction="{{ route('wishlist.toggle', $product) }}">Wishlist</button>
-                            </div>
-                        </form>
+                        @endunless
                     @else
                         <div class="mt-8">
                             <a href="{{ route('login') }}" class="btn-primary">Log in to purchase</a>

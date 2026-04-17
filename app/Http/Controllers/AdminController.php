@@ -104,13 +104,9 @@ class AdminController extends Controller
 
     public function destroyCategory(Category $category): RedirectResponse
     {
-        if ($category->products()->exists()) {
-            return back()->with('error', 'This category has products. Move or delete products first.');
-        }
-
-        if ($category->children()->exists()) {
-            return back()->with('error', 'This category has sub-categories. Delete them first.');
-        }
+        // Keep products and child categories usable when a category is removed.
+        $category->products()->update(['category_id' => null]);
+        $category->children()->update(['parent_id' => null]);
 
         $category->delete();
 
@@ -130,12 +126,22 @@ class AdminController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'logo' => ['nullable', 'url'],
+            'logo_file' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'is_featured' => ['nullable', 'boolean'],
             'is_active' => ['nullable', 'boolean'],
         ]);
 
+        $logoPath = $validated['logo'] ?? null;
+
+        if ($request->hasFile('logo_file')) {
+            $storedPath = $request->file('logo_file')->store('brands', 'public');
+            $logoPath = Storage::url($storedPath);
+        }
+
         Brand::query()->create([
-            ...$validated,
+            'name' => $validated['name'],
+            'description' => $validated['description'] ?? null,
+            'logo' => $logoPath,
             'slug' => $this->uniqueSlug($validated['name'], Brand::class),
             'is_featured' => $request->boolean('is_featured'),
             'is_active' => $request->boolean('is_active', true),
@@ -150,18 +156,46 @@ class AdminController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'logo' => ['nullable', 'url'],
+            'logo_file' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'is_featured' => ['nullable', 'boolean'],
             'is_active' => ['nullable', 'boolean'],
         ]);
 
+        $logoPath = $validated['logo'] ?? $brand->logo;
+
+        if ($request->hasFile('logo_file')) {
+            $this->deleteStoredPublicFile($brand->logo);
+            $storedPath = $request->file('logo_file')->store('brands', 'public');
+            $logoPath = Storage::url($storedPath);
+        }
+
         $brand->update([
-            ...$validated,
+            'name' => $validated['name'],
+            'description' => $validated['description'] ?? null,
+            'logo' => $logoPath,
             'slug' => $this->uniqueSlug($validated['name'], Brand::class, $brand->id),
             'is_featured' => $request->boolean('is_featured'),
             'is_active' => $request->boolean('is_active'),
         ]);
 
         return back()->with('success', 'Brand updated successfully.');
+    }
+
+    public function destroyBrand(Brand $brand): RedirectResponse
+    {
+        $this->deleteStoredPublicFile($brand->logo);
+        $brand->delete();
+
+        return back()->with('success', 'Brand deleted successfully.');
+    }
+
+    protected function deleteStoredPublicFile(?string $publicUrl): void
+    {
+        if (! $publicUrl || ! str_starts_with($publicUrl, '/storage/')) {
+            return;
+        }
+
+        Storage::disk('public')->delete(str_replace('/storage/', '', $publicUrl));
     }
 
     public function productsIndex(): View

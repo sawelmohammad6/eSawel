@@ -7,7 +7,7 @@
                 <div class="fade-in">
                     <p class="section-kicker !text-white/80">Bangladesh's Favorite Online</p>
                     <h1 class="mt-4 text-5xl font-black leading-none text-white sm:text-6xl lg:text-7xl">Fashion Mall</h1>
-                    <p class="mt-5 max-w-2xl text-lg text-white/85">A bright multi-vendor shopping experience built with Laravel, Blade, Tailwind CSS, JavaScript, PHP, and a MySQL-ready structure.</p>
+                    <p class="mt-5 max-w-2xl text-lg text-white/85">A bright and modern multi-vendor eCommerce platform delivering a seamless shopping experience with powerful Features and Product.</p>
 
                     <form action="{{ route('products.index') }}" method="GET" class="mt-8 max-w-2xl" data-search-box>
                         <div class="relative">
@@ -27,7 +27,7 @@
                 <div class="grid gap-4 sm:grid-cols-2">
                     @forelse ($heroBanners as $banner)
                         <a href="{{ $banner->link ?: route('products.index') }}" class="promo-tile fade-in">
-                            <img src="{{ $banner->image }}" alt="{{ $banner->title }}" class="h-64 w-full object-cover">
+                            <img src="{{ $banner->image }}" alt="{{ $banner->title }}" class="h-64 w-full object-cover" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=1200&q=80';">
                             <div class="space-y-1 px-5 py-4">
                                 <p class="text-xs font-bold uppercase tracking-[0.3em] text-[var(--color-brand-rose)]">{{ $banner->placement === 'home_hero' ? 'Spotlight' : 'Promo' }}</p>
                                 <h3 class="text-2xl font-black">{{ $banner->title }}</h3>

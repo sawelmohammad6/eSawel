@@ -19,6 +19,11 @@ class CheckoutController extends Controller
 {
     public function index(Request $request): View|RedirectResponse
     {
+        if ($request->user()->isShoppingDisabled()) {
+            return redirect()->route('seller.dashboard')
+                ->with('success', 'Checkout is for customers. Manage sales from Seller Panel → Orders.');
+        }
+
         $cart = $request->user()->cart()->firstOrCreate()->load('items.product.images');
 
         if ($cart->items->isEmpty()) {
@@ -49,6 +54,13 @@ class CheckoutController extends Controller
         ]);
 
         $user = $request->user();
+
+        if ($user->isShoppingDisabled()) {
+            throw ValidationException::withMessages([
+                'checkout' => 'Seller accounts cannot place customer orders. Use Seller Panel to fulfill buyer orders.',
+            ]);
+        }
+
         $cart = $user->cart()->firstOrCreate()->load('items.product.seller.sellerProfile');
 
         if ($cart->items->isEmpty()) {

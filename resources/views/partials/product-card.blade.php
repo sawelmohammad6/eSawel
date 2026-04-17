@@ -18,10 +18,19 @@
                 <p class="text-xs font-bold uppercase tracking-[0.25em] text-[var(--color-brand-rose)]">{{ $product->brand?->name ?? 'Marketplace' }}</p>
                 <a href="{{ route('products.show', $product) }}" class="mt-1 line-clamp-2 text-lg font-black text-slate-900">{{ $product->name }}</a>
             </div>
-            <form action="{{ route('compare.toggle', $product) }}" method="POST">
-                @csrf
-                <button class="rounded-full border border-[#ffd6e5] px-3 py-2 text-xs font-semibold text-slate-500 hover:border-[var(--color-brand-rose)] hover:text-[var(--color-brand-rose)]" type="submit">Compare</button>
-            </form>
+            @auth
+                @unless (auth()->user()->isShoppingDisabled())
+                    <form action="{{ route('compare.toggle', $product) }}" method="POST">
+                        @csrf
+                        <button class="rounded-full border border-[#ffd6e5] px-3 py-2 text-xs font-semibold text-slate-500 hover:border-[var(--color-brand-rose)] hover:text-[var(--color-brand-rose)]" type="submit">Compare</button>
+                    </form>
+                @endunless
+            @else
+                <form action="{{ route('compare.toggle', $product) }}" method="POST">
+                    @csrf
+                    <button class="rounded-full border border-[#ffd6e5] px-3 py-2 text-xs font-semibold text-slate-500 hover:border-[var(--color-brand-rose)] hover:text-[var(--color-brand-rose)]" type="submit">Compare</button>
+                </form>
+            @endauth
         </div>
 
         <div class="flex items-center gap-3">
@@ -38,14 +47,18 @@
 
         <div class="mt-auto flex flex-wrap gap-2">
             @auth
-                <form action="{{ route('wishlist.toggle', $product) }}" method="POST" class="flex-1">
-                    @csrf
-                    <button class="btn-outline w-full" type="submit">Wishlist</button>
-                </form>
-                <form action="{{ route('cart.store', $product) }}" method="POST" class="flex-1">
-                    @csrf
-                    <button class="btn-primary w-full" type="submit">Add to Cart</button>
-                </form>
+                @unless (auth()->user()->isShoppingDisabled())
+                    <form action="{{ route('wishlist.toggle', $product) }}" method="POST" class="flex-1">
+                        @csrf
+                        <button class="btn-outline w-full" type="submit">Wishlist</button>
+                    </form>
+                    <form action="{{ route('cart.store', $product) }}" method="POST" class="flex-1">
+                        @csrf
+                        <button class="btn-primary w-full" type="submit">Add to Cart</button>
+                    </form>
+                @else
+                    <a href="{{ route('seller.products.index') }}" class="btn-primary w-full">List products</a>
+                @endunless
             @else
                 <a href="{{ route('login') }}" class="btn-primary w-full">Log in to buy</a>
             @endauth

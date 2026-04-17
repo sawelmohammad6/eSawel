@@ -17,8 +17,13 @@ class CartController extends Controller
         return $request->user()->cart()->firstOrCreate();
     }
 
-    public function index(Request $request): View
+    public function index(Request $request): View|RedirectResponse
     {
+        if ($request->user()->isShoppingDisabled()) {
+            return redirect()->route('seller.dashboard')
+                ->with('success', 'Seller accounts sell through Seller Panel—customer cart is not used for your shop.');
+        }
+
         $cart = $this->cart($request)->load('items.product.images');
 
         return view('cart.index', compact('cart'));
@@ -26,6 +31,12 @@ class CartController extends Controller
 
     public function store(Request $request, Product $product): RedirectResponse
     {
+        if ($request->user()->isShoppingDisabled()) {
+            throw ValidationException::withMessages([
+                'product' => 'Use Seller Panel to list products. Customer cart is for buyers only.',
+            ]);
+        }
+
         abort_unless($product->status === 'published' && $product->approval_status === 'approved', 404);
 
         $request->validate([
@@ -54,6 +65,12 @@ class CartController extends Controller
 
     public function buyNow(Request $request, Product $product): RedirectResponse
     {
+        if ($request->user()->isShoppingDisabled()) {
+            throw ValidationException::withMessages([
+                'product' => 'Use Seller Panel to sell. Checkout is for customers only.',
+            ]);
+        }
+
         $request->merge(['quantity' => $request->integer('quantity', 1)]);
         $this->store($request, $product);
 
@@ -62,6 +79,12 @@ class CartController extends Controller
 
     public function update(Request $request, CartItem $cartItem): RedirectResponse
     {
+        if ($request->user()->isShoppingDisabled()) {
+            throw ValidationException::withMessages([
+                'cart' => 'Seller accounts do not use the customer cart.',
+            ]);
+        }
+
         abort_unless($cartItem->cart->user_id === $request->user()->id, 403);
 
         $request->validate([
@@ -79,6 +102,10 @@ class CartController extends Controller
 
     public function destroy(Request $request, CartItem $cartItem): RedirectResponse
     {
+        if ($request->user()->isShoppingDisabled()) {
+            return redirect()->route('seller.dashboard');
+        }
+
         abort_unless($cartItem->cart->user_id === $request->user()->id, 403);
 
         $cartItem->delete();

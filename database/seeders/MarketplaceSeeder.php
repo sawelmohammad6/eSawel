@@ -140,10 +140,11 @@ class MarketplaceSeeder extends Seeder
         });
 
         Banner::query()->updateOrCreate(
-            ['title' => 'Exclusive Women Collection'],
+            ['placement' => 'home_hero', 'sort_order' => 1],
             [
+                'title' => 'Exclusive Collection',
                 'subtitle' => 'Imported styles and local favorites',
-                'image' => 'https://picsum.photos/seed/banner-women/1200/700',
+                'image' => 'https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=1200&q=80',
                 'link' => '/products?category=women-fashion',
                 'placement' => 'home_hero',
                 'sort_order' => 1,
