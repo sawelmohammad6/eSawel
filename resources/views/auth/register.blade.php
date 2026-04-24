@@ -17,8 +17,30 @@
                     <option value="seller" @selected(old('account_type') === 'seller')>Seller</option>
                 </select>
                 <input class="field" type="text" name="shop_name" value="{{ old('shop_name') }}" placeholder="Shop name for sellers">
-                <input class="field" type="password" name="password" placeholder="Password">
-                <input class="field" type="password" name="password_confirmation" placeholder="Confirm password">
+                <div class="relative" data-password-wrapper>
+                    <input class="field pr-20" type="password" name="password" placeholder="Password" autocomplete="new-password" data-password-input>
+                    <button
+                        class="absolute inset-y-0 right-0 flex items-center px-4 text-xs font-semibold text-slate-500 transition hover:text-slate-700"
+                        type="button"
+                        aria-label="Show password"
+                        aria-pressed="false"
+                        data-password-toggle
+                    >
+                        Show
+                    </button>
+                </div>
+                <div class="relative" data-password-wrapper>
+                    <input class="field pr-20" type="password" name="password_confirmation" placeholder="Confirm password" autocomplete="new-password" data-password-input>
+                    <button
+                        class="absolute inset-y-0 right-0 flex items-center px-4 text-xs font-semibold text-slate-500 transition hover:text-slate-700"
+                        type="button"
+                        aria-label="Show password"
+                        aria-pressed="false"
+                        data-password-toggle
+                    >
+                        Show
+                    </button>
+                </div>
                 <button class="btn-primary md:col-span-2" type="submit">Create Account</button>
             </form>
         </div>

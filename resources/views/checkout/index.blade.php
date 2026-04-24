@@ -2,6 +2,22 @@
 
 @section('content')
     <section class="shell">
+        @php
+            $mediaUrl = function (?string $path): string {
+                $path = trim((string) $path);
+
+                if ($path === '') {
+                    return asset('images/placeholder.svg');
+                }
+
+                if (\Illuminate\Support\Str::startsWith($path, ['http://', 'https://', '/'])) {
+                    return $path;
+                }
+
+                return asset('storage/'.$path);
+            };
+        @endphp
+
         <div class="grid gap-8 lg:grid-cols-[1fr_380px]">
             <form action="{{ route('checkout.store') }}" method="POST" class="market-card p-6 lg:p-8">
                 @csrf
@@ -71,7 +87,7 @@
                 <div class="mt-6 space-y-4">
                     @foreach ($cart->items as $item)
                         <div class="flex items-center gap-3">
-                            <img src="{{ $item->product->images->first()?->path ?: 'https://picsum.photos/seed/checkout-'.$item->product->slug.'/80/80' }}" alt="{{ $item->product->name }}" class="h-16 w-16 rounded-[18px] object-cover">
+                            <img src="{{ $mediaUrl($item->product->images->first()?->path) }}" alt="{{ $item->product->name }}" class="h-16 w-16 rounded-[18px] object-cover">
                             <div class="flex-1">
                                 <p class="font-semibold text-slate-800">{{ $item->product->name }}</p>
                                 <p class="text-sm text-slate-500">Qty {{ $item->quantity }}</p>

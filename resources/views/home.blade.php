@@ -1,6 +1,22 @@
 @extends('layouts.app')
 
 @section('content')
+    @php
+        $mediaUrl = function (?string $path): string {
+            $path = trim((string) $path);
+
+            if ($path === '') {
+                return asset('images/placeholder.svg');
+            }
+
+            if (\Illuminate\Support\Str::startsWith($path, ['http://', 'https://', '/'])) {
+                return $path;
+            }
+
+            return asset('storage/'.$path);
+        };
+    @endphp
+
     <section class="shell">
         <div class="hero-surface relative overflow-hidden px-6 py-10 sm:px-10 lg:px-14">
             <div class="grid gap-10 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
@@ -27,7 +43,7 @@
                 <div class="grid gap-4 sm:grid-cols-2">
                     @forelse ($heroBanners as $banner)
                         <a href="{{ $banner->link ?: route('products.index') }}" class="promo-tile fade-in">
-                            <img src="{{ $banner->image }}" alt="{{ $banner->title }}" class="h-64 w-full object-cover" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=1200&q=80';">
+                            <img src="{{ $mediaUrl($banner->image) }}" alt="{{ $banner->title }}" class="h-64 w-full object-cover">
                             <div class="space-y-1 px-5 py-4">
                                 <p class="text-xs font-bold uppercase tracking-[0.3em] text-[var(--color-brand-rose)]">{{ $banner->placement === 'home_hero' ? 'Spotlight' : 'Promo' }}</p>
                                 <h3 class="text-2xl font-black">{{ $banner->title }}</h3>
@@ -96,7 +112,7 @@
         <div class="grid gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
             @forelse ($featuredCategories as $category)
                 <a href="{{ route('products.index', ['category' => $category->slug]) }}" class="category-tile">
-                    <img src="{{ $category->image ?: 'https://picsum.photos/seed/'.$category->slug.'/280/280' }}" alt="{{ $category->name }}" class="h-28 w-full rounded-[20px] object-cover">
+                    <img src="{{ $mediaUrl($category->image) }}" alt="{{ $category->name }}" class="h-28 w-full rounded-[20px] object-cover">
                     <div>
                         <p class="font-black text-slate-900">{{ $category->name }}</p>
                         <p class="text-sm text-slate-500">{{ $category->products_count }} products</p>
@@ -116,7 +132,7 @@
         <div class="grid gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8">
             @foreach ($brands as $brand)
                 <a href="{{ route('products.index', ['brand' => $brand->slug]) }}" class="category-tile">
-                    <img src="{{ $brand->logo ?: 'https://picsum.photos/seed/brand-'.$brand->slug.'/220/220' }}" alt="{{ $brand->name }}" class="h-24 w-full rounded-[18px] object-contain bg-white p-4">
+                    <img src="{{ $mediaUrl($brand->logo) }}" alt="{{ $brand->name }}" class="h-24 w-full rounded-[18px] object-contain bg-white p-4">
                     <p class="font-black text-slate-900">{{ $brand->name }}</p>
                 </a>
             @endforeach

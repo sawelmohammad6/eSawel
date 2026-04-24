@@ -1,5 +1,10 @@
 @php
-    $image = $product->images->first()?->path ?: 'https://picsum.photos/seed/'.$product->slug.'/600/600';
+    $rawImage = $product->images->first()?->path;
+    $image = $rawImage
+        ? (\Illuminate\Support\Str::startsWith($rawImage, ['http://', 'https://', '/'])
+            ? $rawImage
+            : asset('storage/'.$rawImage))
+        : asset('images/placeholder.svg');
     $oldPrice = $product->sale_price ? (float) $product->base_price : null;
     $discountPercent = $oldPrice ? round((($oldPrice - $product->effective_price) / $oldPrice) * 100) : null;
 @endphp

@@ -3,9 +3,21 @@
 @section('content')
     @php
         $formAction = $editingProduct ? route('seller.products.update', $editingProduct) : route('seller.products.store');
-        $imageUrls = $editingProduct ? $editingProduct->images->pluck('path')->implode("\n") : '';
         $selectedCategoryId = old('category_id', $editingProduct->category_id ?? null);
         $selectedBrandId = old('brand_id', $editingProduct->brand_id ?? null);
+        $mediaUrl = function (?string $path): string {
+            $path = trim((string) $path);
+
+            if ($path === '') {
+                return asset('images/placeholder.svg');
+            }
+
+            if (\Illuminate\Support\Str::startsWith($path, ['http://', 'https://', '/'])) {
+                return $path;
+            }
+
+            return asset('storage/'.$path);
+        };
     @endphp
 
     <section class="shell">
@@ -62,7 +74,6 @@
                         <input class="field" type="file" name="images[]" accept="image/jpeg,image/png,image/webp,image/jpg" multiple>
                         <p class="mt-1 text-xs text-slate-500">Upload JPG, PNG, or WebP (up to 4&nbsp;MB each). First image is the main photo. You can select several files at once.</p>
                     </div>
-                    <textarea class="field min-h-24" name="image_urls" placeholder="Or paste image URLs, one per line (optional)">{{ old('image_urls', $imageUrls) }}</textarea>
 
                     <div class="grid grid-cols-2 gap-3">
                         <input class="field" type="number" step="0.01" name="base_price" value="{{ old('base_price', $editingProduct->base_price ?? '') }}" placeholder="Base price">
@@ -104,7 +115,7 @@
                             <tr>
                                 <td>
                                     <div class="flex items-center gap-3">
-                                        <img src="{{ $product->images->first()?->path ?: 'https://picsum.photos/seed/sp-'.$product->slug.'/80/80' }}" alt="{{ $product->name }}" class="h-14 w-14 rounded-[16px] object-cover">
+                                        <img src="{{ $mediaUrl($product->images->first()?->path) }}" alt="{{ $product->name }}" class="h-14 w-14 rounded-[16px] object-cover">
                                         <div>
                                             <p class="font-black">{{ $product->name }}</p>
                                             <p class="text-xs text-slate-500">{{ $product->sku }}</p>

@@ -10,7 +10,18 @@
             <form action="{{ route('login.store') }}" method="POST" class="mt-8 space-y-4">
                 @csrf
                 <input class="field" type="text" name="login" value="{{ old('login') }}" placeholder="Email or phone">
-                <input class="field" type="password" name="password" placeholder="Password">
+                <div class="relative" data-password-wrapper>
+                    <input class="field pr-20" type="password" name="password" placeholder="Password" autocomplete="current-password" data-password-input>
+                    <button
+                        class="absolute inset-y-0 right-0 flex items-center px-4 text-xs font-semibold text-slate-500 transition hover:text-slate-700"
+                        type="button"
+                        aria-label="Show password"
+                        aria-pressed="false"
+                        data-password-toggle
+                    >
+                        Show
+                    </button>
+                </div>
                 <label class="flex items-center gap-3 text-sm text-slate-600">
                     <input type="checkbox" name="remember" value="1">
                     Remember me

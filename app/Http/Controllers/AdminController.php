@@ -44,18 +44,17 @@ class AdminController extends Controller
             'parent_id' => ['nullable', 'exists:categories,id'],
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'image' => ['nullable', 'url'],
             'image_file' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
             'is_featured' => ['nullable', 'boolean'],
             'is_active' => ['nullable', 'boolean'],
         ]);
 
-        $imagePath = $validated['image'] ?? null;
+        $imagePath = null;
 
         if ($request->hasFile('image_file')) {
             $storedPath = $request->file('image_file')->store('categories', 'public');
-            $imagePath = Storage::url($storedPath);
+            $imagePath = $storedPath;
         }
 
         Category::query()->create([
@@ -76,18 +75,18 @@ class AdminController extends Controller
             'parent_id' => ['nullable', 'exists:categories,id'],
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'image' => ['nullable', 'url'],
             'image_file' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
             'is_featured' => ['nullable', 'boolean'],
             'is_active' => ['nullable', 'boolean'],
         ]);
 
-        $imagePath = $validated['image'] ?? $category->image;
+        $imagePath = $category->image;
 
         if ($request->hasFile('image_file')) {
+            $this->deleteStoredPublicFile($category->image);
             $storedPath = $request->file('image_file')->store('categories', 'public');
-            $imagePath = Storage::url($storedPath);
+            $imagePath = $storedPath;
         }
 
         $category->update([
@@ -108,6 +107,7 @@ class AdminController extends Controller
         $category->products()->update(['category_id' => null]);
         $category->children()->update(['parent_id' => null]);
 
+        $this->deleteStoredPublicFile($category->image);
         $category->delete();
 
         return back()->with('success', 'Category deleted successfully.');
@@ -125,17 +125,16 @@ class AdminController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'logo' => ['nullable', 'url'],
             'logo_file' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'is_featured' => ['nullable', 'boolean'],
             'is_active' => ['nullable', 'boolean'],
         ]);
 
-        $logoPath = $validated['logo'] ?? null;
+        $logoPath = null;
 
         if ($request->hasFile('logo_file')) {
             $storedPath = $request->file('logo_file')->store('brands', 'public');
-            $logoPath = Storage::url($storedPath);
+            $logoPath = $storedPath;
         }
 
         Brand::query()->create([
@@ -155,18 +154,17 @@ class AdminController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'logo' => ['nullable', 'url'],
             'logo_file' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'is_featured' => ['nullable', 'boolean'],
             'is_active' => ['nullable', 'boolean'],
         ]);
 
-        $logoPath = $validated['logo'] ?? $brand->logo;
+        $logoPath = $brand->logo;
 
         if ($request->hasFile('logo_file')) {
             $this->deleteStoredPublicFile($brand->logo);
             $storedPath = $request->file('logo_file')->store('brands', 'public');
-            $logoPath = Storage::url($storedPath);
+            $logoPath = $storedPath;
         }
 
         $brand->update([
@@ -187,15 +185,6 @@ class AdminController extends Controller
         $brand->delete();
 
         return back()->with('success', 'Brand deleted successfully.');
-    }
-
-    protected function deleteStoredPublicFile(?string $publicUrl): void
-    {
-        if (! $publicUrl || ! str_starts_with($publicUrl, '/storage/')) {
-            return;
-        }
-
-        Storage::disk('public')->delete(str_replace('/storage/', '', $publicUrl));
     }
 
     public function productsIndex(): View
@@ -241,11 +230,7 @@ class AdminController extends Controller
     public function destroyProduct(Product $product): RedirectResponse
     {
         foreach ($product->images as $image) {
-            $path = (string) $image->path;
-
-            if (str_starts_with($path, '/storage/')) {
-                Storage::disk('public')->delete(str_replace('/storage/', '', $path));
-            }
+            $this->deleteStoredPublicFile($image->path);
         }
 
         $product->delete();
@@ -310,15 +295,18 @@ class AdminController extends Controller
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'subtitle' => ['nullable', 'string', 'max:255'],
-            'image' => ['required', 'url'],
+            'image_file' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'link' => ['nullable', 'url'],
             'placement' => ['required', 'in:home_hero,promo'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
             'is_active' => ['nullable', 'boolean'],
         ]);
 
+        $storedPath = $request->file('image_file')->store('banners', 'public');
+
         Banner::query()->create([
             ...$validated,
+            'image' => $storedPath,
             'sort_order' => $validated['sort_order'] ?? 0,
             'is_active' => $request->boolean('is_active', true),
         ]);
@@ -331,15 +319,23 @@ class AdminController extends Controller
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'subtitle' => ['nullable', 'string', 'max:255'],
-            'image' => ['required', 'url'],
+            'image_file' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'link' => ['nullable', 'url'],
             'placement' => ['required', 'in:home_hero,promo'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
             'is_active' => ['nullable', 'boolean'],
         ]);
 
+        $imagePath = $banner->image;
+
+        if ($request->hasFile('image_file')) {
+            $this->deleteStoredPublicFile($banner->image);
+            $imagePath = $request->file('image_file')->store('banners', 'public');
+        }
+
         $banner->update([
             ...$validated,
+            'image' => $imagePath,
             'sort_order' => $validated['sort_order'] ?? 0,
             'is_active' => $request->boolean('is_active'),
         ]);
@@ -464,21 +460,16 @@ class AdminController extends Controller
             'is_featured' => ['nullable', 'boolean'],
             'is_trending' => ['nullable', 'boolean'],
             'is_flash_deal' => ['nullable', 'boolean'],
-            'image_urls' => ['nullable', 'string'],
             'images' => ['nullable', 'array'],
             'images.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
         ]);
 
-        $imageUrls = preg_split('/\r\n|\r|\n/', trim((string) ($validated['image_urls'] ?? ''))) ?: [];
-        $uploadedImageUrls = collect($request->file('images', []))
-            ->map(function ($image): string {
-                $storedPath = $image->store('products', 'public');
-
-                return Storage::url($storedPath);
-            })
+        $uploadedImagePaths = collect($request->file('images', []))
+            ->filter()
+            ->map(fn ($image): string => $image->store('products', 'public'))
             ->all();
 
-        $imageUrls = array_values(array_filter([...$uploadedImageUrls, ...$imageUrls]));
+        $imagePaths = array_values(array_filter($uploadedImagePaths));
 
         $salePrice = $validated['sale_price'] ?? null;
         $discount = isset($validated['discount_percentage']) ? (float) $validated['discount_percentage'] : null;
@@ -511,6 +502,6 @@ class AdminController extends Controller
             'is_flash_deal' => $request->boolean('is_flash_deal'),
         ];
 
-        return [$data, $imageUrls];
+        return [$data, $imagePaths];
     }
 }

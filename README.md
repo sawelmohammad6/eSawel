@@ -28,14 +28,17 @@ A Laravel multi-vendor e-commerce project built from your PDF requirement and st
   - users
   - orders
   - reports
-- Seeded demo data so the UI is populated immediately
+- Persistent MySQL storage (no automatic demo resets)
 
 
 
 ## Verified Commands
 
 ```bash
-php artisan migrate:fresh --seed
+php artisan migrate
+php artisan storage:link
+# Optional (creates an admin only if missing)
+php artisan db:seed --class=AdminUserSeeder
 php artisan route:list
 php artisan test
 npm install
@@ -49,4 +52,3 @@ php artisan serve
 ```
 
 Then open `http://127.0.0.1:8000`.
-

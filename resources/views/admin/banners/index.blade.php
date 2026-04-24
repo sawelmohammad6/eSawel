@@ -6,11 +6,11 @@
             <div class="market-card p-6">
                 <p class="section-kicker">Homepage</p>
                 <h1 class="mt-2 text-3xl font-black">Banners</h1>
-                <form action="{{ route('admin.banners.store') }}" method="POST" class="mt-6 space-y-4">
+                <form action="{{ route('admin.banners.store') }}" method="POST" enctype="multipart/form-data" class="mt-6 space-y-4">
                     @csrf
                     <input class="field" type="text" name="title" placeholder="Title">
                     <input class="field" type="text" name="subtitle" placeholder="Subtitle">
-                    <input class="field" type="url" name="image" placeholder="Image URL">
+                    <input class="field" type="file" name="image_file" accept="image/*">
                     <input class="field" type="url" name="link" placeholder="Link URL">
                     <select class="field" name="placement">
                         <option value="home_hero">Home hero</option>
@@ -37,12 +37,12 @@
                                 <td>{{ $banner->title }}</td>
                                 <td>{{ $banner->placement }}</td>
                                 <td>
-                                    <form action="{{ route('admin.banners.update', $banner) }}" method="POST" class="grid gap-2 md:grid-cols-2">
+                                    <form action="{{ route('admin.banners.update', $banner) }}" method="POST" enctype="multipart/form-data" class="grid gap-2 md:grid-cols-2">
                                         @csrf
                                         @method('PUT')
                                         <input class="field" type="text" name="title" value="{{ $banner->title }}">
                                         <input class="field" type="text" name="subtitle" value="{{ $banner->subtitle }}">
-                                        <input class="field md:col-span-2" type="url" name="image" value="{{ $banner->image }}" placeholder="Image URL">
+                                        <input class="field md:col-span-2" type="file" name="image_file" accept="image/*">
                                         <input class="field md:col-span-2" type="url" name="link" value="{{ $banner->link }}" placeholder="Link URL">
                                         <select class="field" name="placement">
                                             <option value="home_hero" @selected($banner->placement === 'home_hero')>Home hero</option>

@@ -2,6 +2,22 @@
 
 @section('content')
     <section class="shell">
+        @php
+            $mediaUrl = function (?string $path): string {
+                $path = trim((string) $path);
+
+                if ($path === '') {
+                    return asset('images/placeholder.svg');
+                }
+
+                if (\Illuminate\Support\Str::startsWith($path, ['http://', 'https://', '/'])) {
+                    return $path;
+                }
+
+                return asset('storage/'.$path);
+            };
+        @endphp
+
         <div class="grid gap-8 xl:grid-cols-[0.95fr_1.05fr]">
             <div class="space-y-8">
                 <div class="market-card p-6">
@@ -106,7 +122,7 @@
                     <div class="mt-6 grid gap-4 sm:grid-cols-2">
                         @forelse ($recentlyViewed as $item)
                             <a href="{{ route('products.show', $item->product) }}" class="rounded-[22px] bg-[#fff7fa] p-3">
-                                <img src="{{ $item->product->images->first()?->path ?: 'https://picsum.photos/seed/recent-'.$item->product->slug.'/200/200' }}" alt="{{ $item->product->name }}" class="h-36 w-full rounded-[18px] object-cover">
+                                <img src="{{ $mediaUrl($item->product->images->first()?->path) }}" alt="{{ $item->product->name }}" class="h-36 w-full rounded-[18px] object-cover">
                                 <p class="mt-3 font-black">{{ $item->product->name }}</p>
                             </a>
                         @empty

@@ -2,6 +2,22 @@
 
 @section('content')
     <section class="shell">
+        @php
+            $mediaUrl = function (?string $path): string {
+                $path = trim((string) $path);
+
+                if ($path === '') {
+                    return asset('images/placeholder.svg');
+                }
+
+                if (\Illuminate\Support\Str::startsWith($path, ['http://', 'https://', '/'])) {
+                    return $path;
+                }
+
+                return asset('storage/'.$path);
+            };
+        @endphp
+
         <div class="mb-6">
             <p class="section-kicker">Seller Panel</p>
             <h1 class="section-title">Shop Dashboard</h1>
@@ -28,7 +44,7 @@
                 <div class="mt-6 space-y-4">
                     @forelse ($recentProducts as $product)
                         <div class="flex items-center gap-3">
-                            <img src="{{ $product->images->first()?->path ?: 'https://picsum.photos/seed/seller-'.$product->slug.'/90/90' }}" alt="{{ $product->name }}" class="h-16 w-16 rounded-[18px] object-cover">
+                            <img src="{{ $mediaUrl($product->images->first()?->path) }}" alt="{{ $product->name }}" class="h-16 w-16 rounded-[18px] object-cover">
                             <div>
                                 <p class="font-black">{{ $product->name }}</p>
                                 <p class="text-sm text-slate-500">{{ ucfirst($product->approval_status) }}</p>
