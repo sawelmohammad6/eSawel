@@ -1,7 +1,6 @@
-# Varsity Market
+# eSawel
 
-A Laravel multi-vendor e-commerce project built from your PDF requirement and styled to feel close to the Govaly-inspired reference screenshots.
-
+A multi-vendor e-commerce project built with Laravel.
 ## Stack
 
 - Laravel 12
@@ -11,7 +10,7 @@ A Laravel multi-vendor e-commerce project built from your PDF requirement and st
 - PHP 8.2+
 - MySQL-ready schema
 
-## What Is Included
+## What is Included
 
 - Customer auth with register, login, logout, and password reset
 - Govaly-style storefront with hero search, category drawer, product cards, brand section, and product detail page
@@ -28,17 +27,14 @@ A Laravel multi-vendor e-commerce project built from your PDF requirement and st
   - users
   - orders
   - reports
-- Persistent MySQL storage (no automatic demo resets)
+- Seeded demo data so the UI is populated immediately
 
 
 
 ## Verified Commands
 
 ```bash
-php artisan migrate
-php artisan storage:link
-# Optional (creates an admin only if missing)
-php artisan db:seed --class=AdminUserSeeder
+php artisan migrate:fresh --seed
 php artisan route:list
 php artisan test
 npm install
@@ -51,4 +47,3 @@ npm run build
 php artisan serve
 ```
 
-Then open `http://127.0.0.1:8000`.
