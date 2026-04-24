@@ -2,6 +2,22 @@
 
 @section('content')
     <section class="shell">
+        @php
+            $mediaUrl = function (?string $path): string {
+                $path = trim((string) $path);
+
+                if ($path === '') {
+                    return asset('images/placeholder.svg');
+                }
+
+                if (\Illuminate\Support\Str::startsWith($path, ['http://', 'https://', '/'])) {
+                    return $path;
+                }
+
+                return asset('storage/'.$path);
+            };
+        @endphp
+
         <div class="market-card p-6 lg:p-8">
             <div class="flex flex-wrap items-start justify-between gap-4">
                 <div>
@@ -23,7 +39,7 @@
                     @foreach ($order->items as $item)
                         <div class="rounded-[24px] border border-[#ffd9e8] p-4">
                             <div class="flex flex-col gap-4 sm:flex-row sm:items-center">
-                                <img src="{{ $item->product?->images->first()?->path ?: 'https://picsum.photos/seed/order-'.$item->id.'/100/100' }}" alt="{{ $item->product_name }}" class="h-24 w-24 rounded-[20px] object-cover">
+                                <img src="{{ $mediaUrl($item->product?->images->first()?->path) }}" alt="{{ $item->product_name }}" class="h-24 w-24 rounded-[20px] object-cover">
                                 <div class="flex-1">
                                     <h2 class="text-xl font-black">{{ $item->product_name }}</h2>
                                     <p class="text-sm text-slate-500">Qty {{ $item->quantity }} • Status {{ ucfirst($item->status) }}</p>

@@ -2,6 +2,22 @@
 
 @section('content')
     <section class="shell">
+        @php
+            $mediaUrl = function (?string $path): string {
+                $path = trim((string) $path);
+
+                if ($path === '') {
+                    return asset('images/placeholder.svg');
+                }
+
+                if (\Illuminate\Support\Str::startsWith($path, ['http://', 'https://', '/'])) {
+                    return $path;
+                }
+
+                return asset('storage/'.$path);
+            };
+        @endphp
+
         <div class="grid gap-8 lg:grid-cols-[1fr_360px]">
             <div class="space-y-4">
                 <div>
@@ -11,7 +27,7 @@
 
                 @forelse ($cart->items as $item)
                     <div class="market-card flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
-                        <img src="{{ $item->product->images->first()?->path ?: 'https://picsum.photos/seed/cart-'.$item->product->slug.'/160/160' }}" alt="{{ $item->product->name }}" class="h-28 w-28 rounded-[22px] object-cover">
+                        <img src="{{ $mediaUrl($item->product->images->first()?->path) }}" alt="{{ $item->product->name }}" class="h-28 w-28 rounded-[22px] object-cover">
                         <div class="flex-1">
                             <h2 class="text-xl font-black">{{ $item->product->name }}</h2>
                             <p class="mt-1 text-sm text-slate-500">{{ $item->product->brand?->name }} • {{ $item->product->category?->name }}</p>

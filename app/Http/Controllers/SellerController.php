@@ -97,11 +97,7 @@ class SellerController extends Controller
         abort_unless($product->seller_id === $request->user()->id, 403);
 
         foreach ($product->images as $image) {
-            $path = (string) $image->path;
-
-            if (str_starts_with($path, '/storage/')) {
-                Storage::disk('public')->delete(str_replace('/storage/', '', $path));
-            }
+            $this->deleteStoredPublicFile($image->path);
         }
 
         $product->delete();
@@ -197,22 +193,16 @@ class SellerController extends Controller
             'is_featured' => ['nullable', 'boolean'],
             'is_trending' => ['nullable', 'boolean'],
             'is_flash_deal' => ['nullable', 'boolean'],
-            'image_urls' => ['nullable', 'string'],
             'images' => ['nullable', 'array'],
             'images.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
         ]);
 
-        $imageUrls = preg_split('/\r\n|\r|\n/', trim((string) ($validated['image_urls'] ?? ''))) ?: [];
-        $uploadedImageUrls = collect($request->file('images', []))
+        $uploadedImagePaths = collect($request->file('images', []))
             ->filter()
-            ->map(function ($image): string {
-                $storedPath = $image->store('products', 'public');
-
-                return Storage::url($storedPath);
-            })
+            ->map(fn ($image): string => $image->store('products', 'public'))
             ->all();
 
-        $imageUrls = array_values(array_filter([...$uploadedImageUrls, ...$imageUrls]));
+        $imagePaths = array_values(array_filter($uploadedImagePaths));
 
         $data = [
             'seller_id' => $sellerId,
@@ -236,6 +226,6 @@ class SellerController extends Controller
             'is_flash_deal' => $request->boolean('is_flash_deal'),
         ];
 
-        return [$data, $imageUrls];
+        return [$data, $imagePaths];
     }
 }

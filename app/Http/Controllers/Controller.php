@@ -9,6 +9,7 @@ use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 abstract class Controller
@@ -36,6 +37,10 @@ abstract class Controller
             ->filter()
             ->values();
 
+        if ($urls->isEmpty()) {
+            return;
+        }
+
         $product->images()->delete();
 
         $urls->each(function (string $url, int $index) use ($product): void {
@@ -46,6 +51,36 @@ abstract class Controller
                 'sort_order' => $index,
             ]);
         });
+    }
+
+    protected function deleteStoredPublicFile(?string $path): void
+    {
+        $path = trim((string) $path);
+
+        if ($path === '' || Str::startsWith($path, ['http://', 'https://'])) {
+            return;
+        }
+
+        if (str_starts_with($path, '/storage/')) {
+            $path = str_replace('/storage/', '', $path);
+        }
+
+        Storage::disk('public')->delete(ltrim($path, '/'));
+    }
+
+    protected function publicStorageUrl(?string $path): ?string
+    {
+        $path = trim((string) $path);
+
+        if ($path === '') {
+            return null;
+        }
+
+        if (Str::startsWith($path, ['http://', 'https://', '/'])) {
+            return $path;
+        }
+
+        return asset('storage/'.$path);
     }
 
     protected function logActivity(

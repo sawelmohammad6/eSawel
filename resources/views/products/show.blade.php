@@ -2,7 +2,27 @@
 
 @section('content')
     @php
-        $images = $product->images->isNotEmpty() ? $product->images : collect([(object) ['path' => 'https://picsum.photos/seed/'.$product->slug.'/900/900']]);
+        $mediaUrl = function (?string $path): string {
+            $path = trim((string) $path);
+
+            if ($path === '') {
+                return asset('images/placeholder.svg');
+            }
+
+            if (\Illuminate\Support\Str::startsWith($path, ['http://', 'https://', '/'])) {
+                return $path;
+            }
+
+            return asset('storage/'.$path);
+        };
+
+        $images = $product->images
+            ->map(fn ($image) => (object) ['path' => $mediaUrl($image->path)]);
+
+        if ($images->isEmpty()) {
+            $images = collect([(object) ['path' => asset('images/placeholder.svg')]]);
+        }
+
         $primaryImage = $images->first()->path;
     @endphp
 

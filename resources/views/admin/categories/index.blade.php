@@ -2,6 +2,22 @@
 
 @section('content')
     <section class="shell">
+        @php
+            $mediaUrl = function (?string $path): string {
+                $path = trim((string) $path);
+
+                if ($path === '') {
+                    return asset('images/placeholder.svg');
+                }
+
+                if (\Illuminate\Support\Str::startsWith($path, ['http://', 'https://', '/'])) {
+                    return $path;
+                }
+
+                return asset('storage/'.$path);
+            };
+        @endphp
+
         @include('partials.admin-hub')
         <div class="grid gap-8 xl:grid-cols-[380px_1fr]">
             <div class="market-card p-6">
@@ -18,7 +34,6 @@
                     <input class="field" type="text" name="name" placeholder="Category name">
                     <textarea class="field min-h-28" name="description" placeholder="Description"></textarea>
                     <input class="field" type="file" name="image_file" accept="image/*">
-                    <input class="field" type="url" name="image" placeholder="Or Image URL">
                     <input class="field" type="number" name="sort_order" placeholder="Sort order" value="0">
                     <label class="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" name="is_featured" value="1"> Featured</label>
                     <label class="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" name="is_active" value="1" checked> Active</label>
@@ -41,11 +56,7 @@
                         @foreach ($categories as $category)
                             <tr>
                                 <td>
-                                    @if ($category->image)
-                                        <img src="{{ $category->image }}" alt="{{ $category->name }}" class="h-12 w-12 rounded-lg object-cover">
-                                    @else
-                                        <span class="text-xs text-slate-400">No image</span>
-                                    @endif
+                                    <img src="{{ $mediaUrl($category->image) }}" alt="{{ $category->name }}" class="h-12 w-12 rounded-lg object-cover">
                                 </td>
                                 <td>{{ $category->name }}</td>
                                 <td>{{ $category->parent?->name ?? '-' }}</td>
@@ -61,7 +72,6 @@
                                             @endforeach
                                         </select>
                                         <input class="field md:col-span-2" type="file" name="image_file" accept="image/*">
-                                        <input class="field md:col-span-2" type="url" name="image" value="{{ $category->image }}" placeholder="Or Image URL">
                                         <textarea class="field md:col-span-2" name="description">{{ $category->description }}</textarea>
                                         <div class="flex flex-wrap gap-3 md:col-span-2">
                                             <label class="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" name="is_featured" value="1" @checked($category->is_featured)> Featured</label>

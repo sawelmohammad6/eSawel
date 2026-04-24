@@ -98,7 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             results.innerHTML = items.map((item) => `
                 <a class="flex items-center gap-3 px-4 py-3 transition hover:bg-[var(--color-brand-soft)]" href="${item.url}">
-                    <img class="h-12 w-12 rounded-2xl object-cover" src="${item.image || 'https://picsum.photos/seed/search/80/80'}" alt="">
+                    <img class="h-12 w-12 rounded-2xl object-cover" src="${item.image || '/images/placeholder.svg'}" alt="">
                     <div>
                         <div class="font-semibold text-slate-900">${item.name}</div>
                         <div class="text-sm text-[var(--color-brand-rose)]">Tk ${item.price}</div>
@@ -114,6 +114,30 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!wrapper.contains(event.target)) {
                 results.classList.add('hidden');
             }
+        });
+    });
+
+    document.querySelectorAll('[data-password-wrapper]').forEach((wrapper) => {
+        const input = wrapper.querySelector('[data-password-input]');
+        const toggle = wrapper.querySelector('[data-password-toggle]');
+
+        if (!input || !toggle) {
+            return;
+        }
+
+        const syncToggle = () => {
+            const isVisible = input.type === 'text';
+            toggle.textContent = isVisible ? 'Hide' : 'Show';
+            toggle.setAttribute('aria-label', isVisible ? 'Hide password' : 'Show password');
+            toggle.setAttribute('aria-pressed', isVisible ? 'true' : 'false');
+        };
+
+        syncToggle();
+
+        toggle.addEventListener('click', () => {
+            input.type = input.type === 'password' ? 'text' : 'password';
+            syncToggle();
+            input.focus();
         });
     });
 });

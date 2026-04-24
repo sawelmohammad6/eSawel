@@ -28,7 +28,7 @@ class SearchController extends Controller
             $products->map(fn (Product $product) => [
                 'name' => $product->name,
                 'url' => route('products.show', $product),
-                'image' => $product->images->first()?->path,
+                'image' => $this->publicStorageUrl($product->images->first()?->path),
                 'price' => number_format($product->effective_price, 2),
             ])
         );

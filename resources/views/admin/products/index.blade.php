@@ -3,7 +3,19 @@
 @section('content')
     @php
         $formAction = $editingProduct ? route('admin.products.update', $editingProduct) : route('admin.products.store');
-        $imageUrls = $editingProduct ? $editingProduct->images->pluck('path')->implode("\n") : '';
+        $mediaUrl = function (?string $path): string {
+            $path = trim((string) $path);
+
+            if ($path === '') {
+                return asset('images/placeholder.svg');
+            }
+
+            if (\Illuminate\Support\Str::startsWith($path, ['http://', 'https://', '/'])) {
+                return $path;
+            }
+
+            return asset('storage/'.$path);
+        };
     @endphp
 
     <section class="shell">
@@ -41,7 +53,6 @@
                     <textarea class="field min-h-24" name="specifications_text" placeholder="Specifications, one per line">{{ old('specifications_text', $editingProduct ? implode("\n", $editingProduct->specifications ?? []) : '') }}</textarea>
                     <textarea class="field min-h-24" name="attributes_text" placeholder="Options, one per line">{{ old('attributes_text', $editingProduct ? implode("\n", $editingProduct->attributes ?? []) : '') }}</textarea>
                     <input class="field" type="file" name="images[]" accept="image/*" multiple>
-                    <textarea class="field min-h-24" name="image_urls" placeholder="Image URLs, one per line">{{ old('image_urls', $imageUrls) }}</textarea>
 
                     <div class="grid grid-cols-2 gap-3">
                         <input class="field" type="number" step="0.01" name="base_price" value="{{ old('base_price', $editingProduct->base_price ?? '') }}" placeholder="Base price">
@@ -90,7 +101,7 @@
                             <tr>
                                 <td>
                                     <img
-                                        src="{{ $product->images->first()?->path ?: 'https://picsum.photos/seed/'.$product->slug.'/120/120' }}"
+                                        src="{{ $mediaUrl($product->images->first()?->path) }}"
                                         alt="{{ $product->name }}"
                                         class="h-14 w-14 rounded-lg object-cover"
                                     >
