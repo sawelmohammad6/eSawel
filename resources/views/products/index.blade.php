@@ -14,6 +14,9 @@
                         <option value="">All categories</option>
                         @foreach ($categories as $category)
                             <option value="{{ $category->slug }}" @selected(($filters['category'] ?? '') === $category->slug)>{{ $category->name }}</option>
+                            @foreach ($category->children as $childCategory)
+                                <option value="{{ $childCategory->slug }}" @selected(($filters['category'] ?? '') === $childCategory->slug)>- {{ $childCategory->name }}</option>
+                            @endforeach
                         @endforeach
                     </select>
 

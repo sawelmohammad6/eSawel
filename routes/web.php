@@ -106,6 +106,7 @@ Route::prefix('admin')
         Route::post('/sellers/{user}/approve', [AdminController::class, 'approveSeller'])->name('sellers.approve');
 
         Route::get('/orders', [AdminController::class, 'ordersIndex'])->name('orders.index');
+        Route::get('/orders/{order}', [AdminController::class, 'showOrder'])->name('orders.show');
         Route::patch('/orders/{order}', [AdminController::class, 'updateOrder'])->name('orders.update');
 
         Route::get('/banners', [AdminController::class, 'bannersIndex'])->name('banners.index');

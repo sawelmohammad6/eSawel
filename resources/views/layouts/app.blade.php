@@ -7,7 +7,17 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 @php
-    $navCategories = \App\Models\Category::query()->where('is_active', true)->whereNull('parent_id')->orderBy('sort_order')->take(10)->get();
+    $navCategories = \App\Models\Category::query()
+        ->where('is_active', true)
+        ->whereNull('parent_id')
+        ->with(['children' => fn ($query) => $query
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('name')])
+        ->orderBy('sort_order')
+        ->orderBy('name')
+        ->take(10)
+        ->get();
     $shoppingDisabled = auth()->check() && auth()->user()->isShoppingDisabled();
     $wishlistCount = auth()->check() && ! $shoppingDisabled ? auth()->user()->wishlistItems()->count() : 0;
     $cartCount = auth()->check() && ! $shoppingDisabled ? auth()->user()->cart?->items()->count() ?? 0 : 0;
@@ -27,10 +37,41 @@
 
             <div class="space-y-3">
                 @forelse ($navCategories as $category)
-                    <a href="{{ route('products.index', ['category' => $category->slug]) }}" class="flex items-center justify-between rounded-2xl border border-[#ffe0eb] px-4 py-3 font-semibold text-slate-700 transition hover:border-brand-rose hover:bg-brand-soft">
-                        <span>{{ $category->name }}</span>
-                        <span class="text-brand-rose">+</span>
-                    </a>
+                    @php
+                        $submenuId = 'drawer-category-'.$category->id;
+                    @endphp
+                    <div class="rounded-2xl border border-[#ffe0eb] px-4 py-3">
+                        <div class="flex items-center justify-between gap-3">
+                            <a href="{{ route('products.index', ['category' => $category->slug]) }}" class="font-semibold text-slate-700 transition hover:text-brand-rose">
+                                {{ $category->name }}
+                            </a>
+
+                            @if ($category->children->isNotEmpty())
+                                <button
+                                    type="button"
+                                    class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#ffd1e3] text-lg font-bold leading-none text-brand-rose transition hover:bg-brand-soft"
+                                    data-category-toggle="#{{ $submenuId }}"
+                                    aria-controls="{{ $submenuId }}"
+                                    aria-expanded="false"
+                                >
+                                    <span data-category-toggle-icon>+</span>
+                                </button>
+                            @endif
+                        </div>
+
+                        @if ($category->children->isNotEmpty())
+                            <div id="{{ $submenuId }}" class="mt-3 hidden space-y-2 border-t border-[#ffe7ef] pt-3">
+                                @foreach ($category->children as $childCategory)
+                                    <a
+                                        href="{{ route('products.index', ['category' => $childCategory->slug]) }}"
+                                        class="block rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-brand-soft hover:text-brand-rose"
+                                    >
+                                        {{ $childCategory->name }}
+                                    </a>
+                                @endforeach
+                            </div>
+                        @endif
+                    </div>
                 @empty
                     <p class="rounded-2xl bg-brand-soft px-4 py-3 text-sm text-slate-500">Categories will appear here after you add them from the admin panel.</p>
                 @endforelse

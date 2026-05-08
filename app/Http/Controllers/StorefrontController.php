@@ -30,7 +30,7 @@ class StorefrontController extends Controller
         $featuredCategories = Category::query()
             ->where('is_active', true)
             ->whereNull('parent_id')
-            ->withCount('products')
+            ->withCount(['products', 'descendantProducts'])
             ->orderBy('sort_order')
             ->take(16)
             ->get();

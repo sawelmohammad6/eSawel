@@ -5,11 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\OrderItem;
-use App\Models\PayoutRequest;
 use App\Models\Product;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class SellerController extends Controller
@@ -36,13 +36,8 @@ class SellerController extends Controller
     public function productsIndex(Request $request): View
     {
         return view('seller.products.index', [
-            'products' => $request->user()->products()->with(['images', 'category', 'brand'])->latest()->paginate(10),
-            'categories' => Category::query()
-                ->where('is_active', true)
-                ->with('parent')
-                ->orderBy('sort_order')
-                ->orderBy('name')
-                ->get(),
+            'products' => $request->user()->products()->with(['images', 'category.parent', 'brand'])->latest()->paginate(10),
+            'parentCategories' => $this->activeParentCategoriesWithChildren(),
             'brands' => Brand::query()->where('is_active', true)->orderBy('name')->get(),
             'editingProduct' => null,
         ]);
@@ -53,15 +48,10 @@ class SellerController extends Controller
         abort_unless($product->seller_id === $request->user()->id, 403);
 
         return view('seller.products.index', [
-            'products' => $request->user()->products()->with(['images', 'category', 'brand'])->latest()->paginate(10),
-            'categories' => Category::query()
-                ->where('is_active', true)
-                ->with('parent')
-                ->orderBy('sort_order')
-                ->orderBy('name')
-                ->get(),
+            'products' => $request->user()->products()->with(['images', 'category.parent', 'brand'])->latest()->paginate(10),
+            'parentCategories' => $this->activeParentCategoriesWithChildren(),
             'brands' => Brand::query()->where('is_active', true)->orderBy('name')->get(),
-            'editingProduct' => $product->load('images'),
+            'editingProduct' => $product->load(['images', 'category.parent']),
         ]);
     }
 
@@ -173,10 +163,25 @@ class SellerController extends Controller
         return back()->with('success', 'Payout request submitted.');
     }
 
+    protected function activeParentCategoriesWithChildren()
+    {
+        return Category::query()
+            ->where('is_active', true)
+            ->whereNull('parent_id')
+            ->with(['children' => fn ($query) => $query
+                ->where('is_active', true)
+                ->orderBy('sort_order')
+                ->orderBy('name')])
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+    }
+
     protected function validatedProductData(Request $request, ?Product $product = null, ?int $sellerId = null): array
     {
         $validated = $request->validate([
-            'category_id' => ['required', 'exists:categories,id'],
+            'parent_category_id' => ['required', Rule::exists('categories', 'id')->whereNull('parent_id')],
+            'category_id' => ['required', Rule::exists('categories', 'id')->whereNotNull('parent_id')],
             'brand_id' => ['nullable', 'exists:brands,id'],
             'name' => ['required', 'string', 'max:255'],
             'sku' => ['required', 'string', 'max:255', 'unique:products,sku,'.($product?->id ?? 'NULL').',id'],
@@ -196,6 +201,16 @@ class SellerController extends Controller
             'images' => ['nullable', 'array'],
             'images.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
         ]);
+
+        $selectedSubcategory = Category::query()
+            ->select(['id', 'parent_id'])
+            ->findOrFail($validated['category_id']);
+
+        if ((int) $selectedSubcategory->parent_id !== (int) $validated['parent_category_id']) {
+            throw ValidationException::withMessages([
+                'category_id' => 'The selected subcategory does not belong to the selected parent category.',
+            ]);
+        }
 
         $uploadedImagePaths = collect($request->file('images', []))
             ->filter()

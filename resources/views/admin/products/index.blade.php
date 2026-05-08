@@ -3,6 +3,19 @@
 @section('content')
     @php
         $formAction = $editingProduct ? route('admin.products.update', $editingProduct) : route('admin.products.store');
+        $selectedParentCategoryId = old('parent_category_id', $editingProduct?->category?->parent_id);
+        if (! $selectedParentCategoryId && $editingProduct?->category && $editingProduct->category->parent_id === null) {
+            $selectedParentCategoryId = $editingProduct->category_id;
+        }
+        $selectedSubcategoryId = old('category_id', $editingProduct->category_id ?? null);
+        $categoryMap = $parentCategories
+            ->mapWithKeys(fn ($category) => [
+                $category->id => $category->children->map(fn ($child) => [
+                    'id' => $child->id,
+                    'name' => $child->name,
+                ])->values(),
+            ])
+            ->toArray();
         $mediaUrl = function (?string $path): string {
             $path = trim((string) $path);
 
@@ -37,11 +50,20 @@
                     </select>
                     <input class="field" type="text" name="name" value="{{ old('name', $editingProduct->name ?? '') }}" placeholder="Product name">
                     <input class="field" type="text" name="sku" value="{{ old('sku', $editingProduct->sku ?? '') }}" placeholder="SKU">
-                    <select class="field" name="category_id">
-                        @foreach ($categories as $category)
-                            <option value="{{ $category->id }}" @selected(old('category_id', $editingProduct->category_id ?? '') == $category->id)>{{ $category->name }}</option>
-                        @endforeach
-                    </select>
+
+                    <div class="space-y-3" data-dependent-categories data-category-map='@json($categoryMap)' data-selected-subcategory="{{ $selectedSubcategoryId }}">
+                        <select class="field" name="parent_category_id" data-parent-category-select required>
+                            <option value="">Select a parent category...</option>
+                            @foreach ($parentCategories as $category)
+                                <option value="{{ $category->id }}" @selected((string) $selectedParentCategoryId === (string) $category->id)>{{ $category->name }}</option>
+                            @endforeach
+                        </select>
+
+                        <select class="field" name="category_id" data-subcategory-select required>
+                            <option value="">Select a subcategory...</option>
+                        </select>
+                    </div>
+
                     <select class="field" name="brand_id">
                         <option value="">No brand</option>
                         @foreach ($brands as $brand)
@@ -58,8 +80,14 @@
                         <input class="field" type="number" step="0.01" name="base_price" value="{{ old('base_price', $editingProduct->base_price ?? '') }}" placeholder="Base price">
                         <input class="field" type="number" step="0.01" name="sale_price" value="{{ old('sale_price', $editingProduct->sale_price ?? '') }}" placeholder="Sale price">
                         <input class="field" type="number" step="0.01" min="0" max="100" name="discount_percentage" value="{{ old('discount_percentage') }}" placeholder="Discount %">
-                        <input class="field" type="number" name="stock_quantity" value="{{ old('stock_quantity', $editingProduct->stock_quantity ?? 0) }}" placeholder="Stock">
-                        <input class="field" type="number" name="low_stock_threshold" value="{{ old('low_stock_threshold', $editingProduct->low_stock_threshold ?? 5) }}" placeholder="Low stock alert">
+                        <div>
+                            <label for="admin-stock-quantity" class="mb-1 block text-sm font-bold text-slate-800">Stock Quantity</label>
+                            <input id="admin-stock-quantity" class="field" type="number" min="0" step="1" name="stock_quantity" value="{{ old('stock_quantity', $editingProduct->stock_quantity ?? 0) }}" placeholder="Stock Quantity">
+                        </div>
+                        <div>
+                            <label for="admin-low-stock-threshold" class="mb-1 block text-sm font-bold text-slate-800">Low Stock Alert</label>
+                            <input id="admin-low-stock-threshold" class="field" type="number" min="0" step="1" name="low_stock_threshold" value="{{ old('low_stock_threshold', $editingProduct->low_stock_threshold ?? 5) }}" placeholder="Low Stock Alert">
+                        </div>
                     </div>
 
                     <select class="field" name="status">
@@ -107,7 +135,7 @@
                                     >
                                 </td>
                                 <td>{{ $product->name }}</td>
-                                <td>{{ $product->category?->name ?? '-' }}</td>
+                                <td>{{ $product->category?->parent ? $product->category->parent->name.' > '.$product->category->name : ($product->category?->name ?? '-') }}</td>
                                 <td>{{ $product->seller->name }}</td>
                                 <td>{{ ucfirst($product->approval_status) }} / {{ ucfirst($product->status) }}</td>
                                 <td>Tk {{ number_format($product->effective_price, 0) }}</td>

@@ -11,7 +11,8 @@ use App\Models\Product;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class AdminController extends Controller
@@ -32,16 +33,29 @@ class AdminController extends Controller
 
     public function categoriesIndex(): View
     {
+        $parentCategories = Category::query()
+            ->whereNull('parent_id')
+            ->with(['children' => fn ($query) => $query->orderBy('sort_order')->orderBy('name')])
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+
+        $categoryRows = $parentCategories
+            ->flatMap(function (Category $parentCategory) {
+                return collect([$parentCategory])->merge($parentCategory->children);
+            })
+            ->values();
+
         return view('admin.categories.index', [
-            'categories' => Category::query()->with('parent')->orderBy('sort_order')->latest()->get(),
-            'parentCategories' => Category::query()->whereNull('parent_id')->orderBy('name')->get(),
+            'categories' => $categoryRows,
+            'parentCategories' => $parentCategories,
         ]);
     }
 
     public function storeCategory(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'parent_id' => ['nullable', 'exists:categories,id'],
+            'parent_id' => ['nullable', Rule::exists('categories', 'id')->whereNull('parent_id')],
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'image_file' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
@@ -72,7 +86,15 @@ class AdminController extends Controller
     public function updateCategory(Request $request, Category $category): RedirectResponse
     {
         $validated = $request->validate([
-            'parent_id' => ['nullable', 'exists:categories,id'],
+            'parent_id' => [
+                'nullable',
+                Rule::exists('categories', 'id')->whereNull('parent_id'),
+                function (string $attribute, mixed $value, \Closure $fail) use ($category): void {
+                    if ($value !== null && (int) $value === $category->id) {
+                        $fail('A category cannot be its own parent.');
+                    }
+                },
+            ],
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'image_file' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
@@ -80,6 +102,12 @@ class AdminController extends Controller
             'is_featured' => ['nullable', 'boolean'],
             'is_active' => ['nullable', 'boolean'],
         ]);
+
+        if ($validated['parent_id'] !== null && $category->children()->exists()) {
+            throw ValidationException::withMessages([
+                'parent_id' => 'This category has subcategories. Move or remove them first before making it a subcategory.',
+            ]);
+        }
 
         $imagePath = $category->image;
 
@@ -190,8 +218,8 @@ class AdminController extends Controller
     public function productsIndex(): View
     {
         return view('admin.products.index', [
-            'products' => Product::query()->with(['images', 'category', 'brand', 'seller'])->latest()->paginate(12),
-            'categories' => Category::query()->where('is_active', true)->orderBy('name')->get(),
+            'products' => Product::query()->with(['images', 'category.parent', 'brand', 'seller'])->latest()->paginate(12),
+            'parentCategories' => $this->activeParentCategoriesWithChildren(),
             'brands' => Brand::query()->where('is_active', true)->orderBy('name')->get(),
             'sellers' => User::query()->where('role', 'seller')->where('status', 'active')->orderBy('name')->get(),
             'editingProduct' => null,
@@ -201,11 +229,11 @@ class AdminController extends Controller
     public function editProduct(Product $product): View
     {
         return view('admin.products.index', [
-            'products' => Product::query()->with(['images', 'category', 'brand', 'seller'])->latest()->paginate(12),
-            'categories' => Category::query()->where('is_active', true)->orderBy('name')->get(),
+            'products' => Product::query()->with(['images', 'category.parent', 'brand', 'seller'])->latest()->paginate(12),
+            'parentCategories' => $this->activeParentCategoriesWithChildren(),
             'brands' => Brand::query()->where('is_active', true)->orderBy('name')->get(),
             'sellers' => User::query()->where('role', 'seller')->where('status', 'active')->orderBy('name')->get(),
-            'editingProduct' => $product->load('images'),
+            'editingProduct' => $product->load(['images', 'category.parent']),
         ]);
     }
 
@@ -262,9 +290,23 @@ class AdminController extends Controller
 
     public function ordersIndex(): View
     {
-        $orders = Order::query()->with('user')->latest()->paginate(12);
+        $orders = Order::query()
+            ->with('user')
+            ->latest()
+            ->paginate(12);
 
         return view('admin.orders.index', compact('orders'));
+    }
+
+    public function showOrder(Order $order): View
+    {
+        $order->load([
+            'user',
+            'items.seller',
+            'items.product.images',
+        ]);
+
+        return view('admin.orders.show', compact('order'));
     }
 
     public function updateOrder(Request $request, Order $order): RedirectResponse
@@ -437,11 +479,26 @@ class AdminController extends Controller
         ]);
     }
 
+    protected function activeParentCategoriesWithChildren()
+    {
+        return Category::query()
+            ->where('is_active', true)
+            ->whereNull('parent_id')
+            ->with(['children' => fn ($query) => $query
+                ->where('is_active', true)
+                ->orderBy('sort_order')
+                ->orderBy('name')])
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+    }
+
     protected function validatedProductData(Request $request, ?Product $product = null): array
     {
         $validated = $request->validate([
             'seller_id' => ['required', 'exists:users,id'],
-            'category_id' => ['required', 'exists:categories,id'],
+            'parent_category_id' => ['required', Rule::exists('categories', 'id')->whereNull('parent_id')],
+            'category_id' => ['required', Rule::exists('categories', 'id')->whereNotNull('parent_id')],
             'brand_id' => ['nullable', 'exists:brands,id'],
             'name' => ['required', 'string', 'max:255'],
             'sku' => ['required', 'string', 'max:255', 'unique:products,sku,'.($product?->id ?? 'NULL').',id'],
@@ -463,6 +520,16 @@ class AdminController extends Controller
             'images' => ['nullable', 'array'],
             'images.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
         ]);
+
+        $selectedSubcategory = Category::query()
+            ->select(['id', 'parent_id'])
+            ->findOrFail($validated['category_id']);
+
+        if ((int) $selectedSubcategory->parent_id !== (int) $validated['parent_category_id']) {
+            throw ValidationException::withMessages([
+                'category_id' => 'The selected subcategory does not belong to the selected parent category.',
+            ]);
+        }
 
         $uploadedImagePaths = collect($request->file('images', []))
             ->filter()

@@ -31,10 +31,28 @@ class ProductController extends Controller
                 });
             })
             ->when($request->filled('category'), function (Builder $query) use ($request): void {
-                $query->whereHas('category', function (Builder $categoryQuery) use ($request): void {
-                    $categoryQuery->where('slug', $request->string('category'))
-                        ->orWhere('id', $request->string('category'));
-                });
+                $categoryFilter = trim((string) $request->input('category'));
+                $selectedCategory = Category::query()
+                    ->select(['id', 'parent_id'])
+                    ->where('is_active', true)
+                    ->where(function (Builder $categoryQuery) use ($categoryFilter): void {
+                        $categoryQuery->where('slug', $categoryFilter)
+                            ->orWhere('id', $categoryFilter);
+                    })
+                    ->first();
+
+                if (! $selectedCategory) {
+                    return;
+                }
+
+                if ($selectedCategory->parent_id === null) {
+                    $descendantCategoryIds = $selectedCategory->children()->where('is_active', true)->pluck('id');
+                    $query->whereIn('category_id', $descendantCategoryIds->push($selectedCategory->id));
+
+                    return;
+                }
+
+                $query->where('category_id', $selectedCategory->id);
             })
             ->when($request->filled('brand'), function (Builder $query) use ($request): void {
                 $query->whereHas('brand', function (Builder $brandQuery) use ($request): void {
@@ -64,7 +82,16 @@ class ProductController extends Controller
 
         return view('products.index', [
             'products' => $products->paginate(16)->withQueryString(),
-            'categories' => Category::query()->where('is_active', true)->whereNull('parent_id')->orderBy('sort_order')->get(),
+            'categories' => Category::query()
+                ->where('is_active', true)
+                ->whereNull('parent_id')
+                ->with(['children' => fn ($query) => $query
+                    ->where('is_active', true)
+                    ->orderBy('sort_order')
+                    ->orderBy('name')])
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(),
             'brands' => Brand::query()->where('is_active', true)->orderBy('name')->get(),
             'filters' => $request->only(['q', 'category', 'brand', 'min_price', 'max_price', 'sort']),
         ]);

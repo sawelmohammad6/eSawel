@@ -24,6 +24,96 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    document.querySelectorAll('[data-category-toggle]').forEach((button) => {
+        const targetSelector = button.getAttribute('data-category-toggle');
+
+        if (!targetSelector) {
+            return;
+        }
+
+        const target = document.querySelector(targetSelector);
+        const icon = button.querySelector('[data-category-toggle-icon]');
+
+        if (!target) {
+            return;
+        }
+
+        button.addEventListener('click', () => {
+            const isExpanded = button.getAttribute('aria-expanded') === 'true';
+            button.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
+            target.classList.toggle('hidden', isExpanded);
+
+            if (icon) {
+                icon.textContent = isExpanded ? '+' : '-';
+            }
+        });
+    });
+
+    document.querySelectorAll('[data-dependent-categories]').forEach((wrapper) => {
+        const parentSelect = wrapper.querySelector('[data-parent-category-select]');
+        const subcategorySelect = wrapper.querySelector('[data-subcategory-select]');
+        const rawCategoryMap = wrapper.getAttribute('data-category-map') || '{}';
+        const selectedSubcategoryId = String(wrapper.getAttribute('data-selected-subcategory') || '');
+
+        if (!parentSelect || !subcategorySelect) {
+            return;
+        }
+
+        let categoryMap = {};
+
+        try {
+            categoryMap = JSON.parse(rawCategoryMap);
+        } catch {
+            categoryMap = {};
+        }
+
+        const initialParentValue = String(parentSelect.value || '');
+        let activeSubcategoryId = selectedSubcategoryId || String(subcategorySelect.value || '');
+
+        const renderSubcategories = () => {
+            const parentId = String(parentSelect.value || '');
+            const options = Array.isArray(categoryMap[parentId]) ? categoryMap[parentId] : [];
+            const previousValue = activeSubcategoryId;
+
+            subcategorySelect.innerHTML = '';
+
+            const placeholderOption = document.createElement('option');
+            placeholderOption.value = '';
+            placeholderOption.textContent = options.length ? 'Select a subcategory...' : 'No subcategories available';
+            subcategorySelect.appendChild(placeholderOption);
+
+            options.forEach((subcategory) => {
+                const option = document.createElement('option');
+                option.value = String(subcategory.id);
+                option.textContent = String(subcategory.name || '');
+                subcategorySelect.appendChild(option);
+            });
+
+            if (previousValue && options.some((subcategory) => String(subcategory.id) === previousValue)) {
+                subcategorySelect.value = previousValue;
+            } else {
+                subcategorySelect.value = '';
+            }
+
+            activeSubcategoryId = String(subcategorySelect.value || '');
+            subcategorySelect.disabled = options.length === 0;
+        };
+
+        parentSelect.addEventListener('change', () => {
+            if (String(parentSelect.value || '') !== initialParentValue) {
+                activeSubcategoryId = '';
+            }
+
+            renderSubcategories();
+        });
+
+        subcategorySelect.addEventListener('change', () => {
+            activeSubcategoryId = String(subcategorySelect.value || '');
+        });
+
+        renderSubcategories();
+    });
+
     document.querySelectorAll('[data-flash-message]').forEach((message) => {
         window.setTimeout(() => {
             message.classList.add('opacity-0', 'translate-y-1');

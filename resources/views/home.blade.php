@@ -115,7 +115,7 @@
                     <img src="{{ $mediaUrl($category->image) }}" alt="{{ $category->name }}" class="h-28 w-full rounded-[20px] object-cover">
                     <div>
                         <p class="font-black text-slate-900">{{ $category->name }}</p>
-                        <p class="text-sm text-slate-500">{{ $category->products_count }} products</p>
+                        <p class="text-sm text-slate-500">{{ $category->products_count + $category->descendant_products_count }} products</p>
                     </div>
                 </a>
             @empty
