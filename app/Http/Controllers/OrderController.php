@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\ReturnRequest;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -22,7 +23,7 @@ class OrderController extends Controller
     {
         abort_unless($order->user_id === $request->user()->id || $request->user()->isAdmin(), 403);
 
-        $order->load('items.product.images', 'payments');
+        $order->load('items.product.images', 'items.returnRequest', 'payments');
 
         return view('orders.show', compact('order'));
     }
@@ -54,22 +55,89 @@ class OrderController extends Controller
 
     public function requestReturn(Request $request, OrderItem $orderItem): RedirectResponse
     {
+        $orderItem->loadMissing('order', 'seller');
         abort_unless($orderItem->order->user_id === $request->user()->id, 403);
 
         $request->validate([
+            'order_item_id' => ['nullable', 'integer'],
             'reason' => ['required', 'string', 'max:1000'],
+        ], [
+            'reason.required' => 'Please enter a return reason before submitting.',
         ]);
 
-        ReturnRequest::query()->firstOrCreate(
-            [
-                'order_item_id' => $orderItem->id,
-                'user_id' => $request->user()->id,
-            ],
-            [
-                'reason' => $request->string('reason'),
-                'refund_amount' => $orderItem->total_price,
-                'status' => 'pending',
-            ]
+        $order = $orderItem->order;
+
+        if ($orderItem->status !== 'delivered') {
+            return back()
+                ->withErrors(['return' => 'Return requests are allowed only for delivered items.'])
+                ->withInput();
+        }
+
+        if ($order->payment_status !== 'paid') {
+            return back()
+                ->withErrors(['return' => 'Return requests are allowed only for paid orders.'])
+                ->withInput();
+        }
+
+        if (in_array($order->status, ['cancelled'], true) || in_array($order->delivery_status, ['cancelled'], true)) {
+            return back()
+                ->withErrors(['return' => 'Cancelled orders are not eligible for return requests.'])
+                ->withInput();
+        }
+
+        if ($order->delivery_status !== 'delivered' || ! $order->delivered_at) {
+            return back()
+                ->withErrors(['return' => 'Return requests are available only after delivery is confirmed.'])
+                ->withInput();
+        }
+
+        if (now()->gt($order->delivered_at->copy()->addDays(7))) {
+            return back()
+                ->withErrors(['return' => 'Return window expired. You can request a return within 7 days after delivery.'])
+                ->withInput();
+        }
+
+        if (ReturnRequest::query()->where('order_item_id', $orderItem->id)->exists()) {
+            return back()
+                ->withErrors(['return' => 'A return request for this item has already been submitted.'])
+                ->withInput();
+        }
+
+        $returnRequest = ReturnRequest::query()->create([
+            'order_item_id' => $orderItem->id,
+            'user_id' => $request->user()->id,
+            'reason' => (string) $request->string('reason'),
+            'refund_amount' => $orderItem->total_price,
+            'status' => 'pending',
+        ]);
+
+        $orderIdentifier = $order->order_number ?: 'ORD-'.$order->id;
+        $customerName = $request->user()->name;
+        $productName = $orderItem->product_name;
+        $reason = (string) $returnRequest->reason;
+
+        $sellerUser = $orderItem->seller;
+        if ($sellerUser) {
+            $this->notifyUsers(
+                [$sellerUser],
+                'New return request received',
+                "Product: {$productName} | Customer: {$customerName} | Order: {$orderIdentifier} | Reason: {$reason}",
+                route('seller.orders.index'),
+                'warning'
+            );
+        }
+
+        $adminUsers = User::query()
+            ->whereIn('role', ['admin', 'sub_admin'])
+            ->where('status', 'active')
+            ->get();
+
+        $this->notifyUsers(
+            $adminUsers,
+            'New return request submitted',
+            "Product: {$productName} | Customer: {$customerName} | Order: {$orderIdentifier} | Reason: {$reason}",
+            route('admin.orders.index'),
+            'warning'
         );
 
         return back()->with('success', 'Return request submitted.');

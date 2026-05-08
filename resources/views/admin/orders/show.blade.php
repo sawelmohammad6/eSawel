@@ -117,6 +117,18 @@
                                     <td class="px-4 py-3 text-sm text-slate-700">{{ $item->quantity }}</td>
                                     <td class="px-4 py-3 text-sm font-semibold text-slate-800">Tk {{ number_format((float) $item->unit_price, 0) }}</td>
                                 </tr>
+                                @if ($item->returnRequest)
+                                    <tr class="border-t border-[#ffeef5] bg-[#fff9fc]">
+                                        <td colspan="4" class="px-4 py-3 text-sm">
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">Return Requested</span>
+                                                <span class="text-slate-600">Status: {{ ucfirst($item->returnRequest->status) }}</span>
+                                                <span class="text-slate-500">Requested: {{ optional($item->returnRequest->created_at)->format('d M Y, g:i A') }}</span>
+                                            </div>
+                                            <p class="mt-2 text-slate-700"><span class="font-semibold">Reason:</span> {{ $item->returnRequest->reason }}</p>
+                                        </td>
+                                    </tr>
+                                @endif
                             @empty
                                 <tr>
                                     <td colspan="4" class="px-4 py-5 text-sm text-slate-500">No ordered items found.</td>

@@ -8,6 +8,7 @@ use App\Models\Category;
 use App\Models\Coupon;
 use App\Models\Order;
 use App\Models\Product;
+use App\Models\ReturnRequest;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -295,7 +296,13 @@ class AdminController extends Controller
             ->latest()
             ->paginate(12);
 
-        return view('admin.orders.index', compact('orders'));
+        $returnRequests = ReturnRequest::query()
+            ->with(['orderItem.order', 'orderItem.seller', 'user'])
+            ->latest()
+            ->take(25)
+            ->get();
+
+        return view('admin.orders.index', compact('orders', 'returnRequests'));
     }
 
     public function showOrder(Order $order): View
@@ -304,6 +311,7 @@ class AdminController extends Controller
             'user',
             'items.seller',
             'items.product.images',
+            'items.returnRequest.user',
         ]);
 
         return view('admin.orders.show', compact('order'));
@@ -312,15 +320,40 @@ class AdminController extends Controller
     public function updateOrder(Request $request, Order $order): RedirectResponse
     {
         $request->validate([
-            'status' => ['required', 'in:pending,processing,shipping,completed,cancelled'],
-            'delivery_status' => ['required', 'in:processing,packed,in_transit,delivered,cancelled'],
+            'status' => ['required', 'in:processing,shipped,delivered,cancelled'],
         ]);
 
-        $order->update([
-            'status' => $request->input('status'),
-            'delivery_status' => $request->input('delivery_status'),
-            'delivered_at' => $request->input('delivery_status') === 'delivered' ? now() : $order->delivered_at,
-        ]);
+        $status = (string) $request->input('status');
+
+        $mappedUpdates = match ($status) {
+            'processing' => [
+                'status' => 'processing',
+                'delivery_status' => 'processing',
+            ],
+            'shipped' => [
+                'status' => 'shipping',
+                'delivery_status' => 'in_transit',
+            ],
+            'delivered' => [
+                'status' => 'completed',
+                'delivery_status' => 'delivered',
+                'delivered_at' => now(),
+            ],
+            'cancelled' => [
+                'status' => 'cancelled',
+                'delivery_status' => 'cancelled',
+            ],
+        };
+
+        if ($status === 'delivered' && $order->payment_method === 'cod') {
+            $mappedUpdates['payment_status'] = 'paid';
+        }
+
+        if ($status !== 'delivered') {
+            $mappedUpdates['delivered_at'] = $order->delivered_at;
+        }
+
+        $order->update($mappedUpdates);
 
         return back()->with('success', 'Order updated successfully.');
     }

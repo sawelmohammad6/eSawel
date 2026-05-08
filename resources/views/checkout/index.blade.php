@@ -68,9 +68,7 @@
                             <h2 class="mb-3 text-2xl font-black">Payment Method</h2>
                             <select class="field" name="payment_method">
                                 <option value="cod">Cash on Delivery</option>
-                                <option value="stripe">Stripe Demo</option>
-                                <option value="bkash">bKash Demo</option>
-                                <option value="sslcommerz">SSLCommerz Demo</option>
+                                <option value="sslcommerz">SSLCommerz</option>
                             </select>
                         </div>
                     </div>

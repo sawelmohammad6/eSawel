@@ -38,20 +38,52 @@
                 <div class="space-y-4">
                     @foreach ($order->items as $item)
                         <div class="rounded-[24px] border border-[#ffd9e8] p-4">
+                            @php
+                                $isCancelledOrder = $order->status === 'cancelled' || $order->delivery_status === 'cancelled';
+                                $isPaid = $order->payment_status === 'paid';
+                                $isDeliveredItem = $item->status === 'delivered';
+                                $isReceived = $isDeliveredItem && $order->delivery_status === 'delivered' && $order->delivered_at;
+                                $hasReturnRequest = (bool) $item->returnRequest;
+                                $isReturnWindowOpen = $order->delivered_at ? now()->lte($order->delivered_at->copy()->addDays(7)) : false;
+                                $canRequestReturn = ! $hasReturnRequest && ! $isCancelledOrder && $isPaid && $isReceived && $isReturnWindowOpen;
+                                $isReturnWindowExpired = ! $hasReturnRequest && ! $isCancelledOrder && $isPaid && $isReceived && ! $isReturnWindowOpen;
+                            @endphp
+
                             <div class="flex flex-col gap-4 sm:flex-row sm:items-center">
                                 <img src="{{ $mediaUrl($item->product?->images->first()?->path) }}" alt="{{ $item->product_name }}" class="h-24 w-24 rounded-[20px] object-cover">
                                 <div class="flex-1">
                                     <h2 class="text-xl font-black">{{ $item->product_name }}</h2>
-                                    <p class="text-sm text-slate-500">Qty {{ $item->quantity }} • Status {{ ucfirst($item->status) }}</p>
+                                    <p class="text-sm text-slate-500">Qty {{ $item->quantity }} - Status {{ ucfirst($item->status) }}</p>
                                     <p class="mt-2 text-lg font-black text-[var(--color-brand-rose)]">Tk {{ number_format($item->total_price, 0) }}</p>
                                 </div>
                             </div>
 
-                            <form action="{{ route('orders.items.return', $item) }}" method="POST" class="mt-4 flex flex-col gap-3 sm:flex-row">
-                                @csrf
-                                <input class="field flex-1" type="text" name="reason" placeholder="Reason for return request">
-                                <button class="btn-outline" type="submit">Request Return</button>
-                            </form>
+                            @if ($hasReturnRequest)
+                                <div class="mt-4 rounded-2xl bg-[var(--color-brand-soft)] px-4 py-3 text-sm text-slate-700">
+                                    Return request already submitted ({{ ucfirst($item->returnRequest->status) }}).
+                                </div>
+                            @elseif ($isReturnWindowExpired)
+                                <div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                                    Return period expired. Returns are allowed within 7 days after delivery.
+                                </div>
+                            @elseif ($canRequestReturn)
+                                <form action="{{ route('orders.items.return', $item) }}" method="POST" class="mt-4 flex flex-col gap-3 sm:flex-row">
+                                    @csrf
+                                    <input type="hidden" name="order_item_id" value="{{ $item->id }}">
+                                    <input
+                                        class="field flex-1"
+                                        type="text"
+                                        name="reason"
+                                        placeholder="Reason for return request"
+                                        value="{{ (string) old('order_item_id') === (string) $item->id ? old('reason') : '' }}"
+                                        required
+                                    >
+                                    <button class="btn-outline" type="submit">Request Return</button>
+                                </form>
+                                @if ($errors->has('reason') && (string) old('order_item_id') === (string) $item->id)
+                                    <p class="mt-2 text-sm font-semibold text-red-600">{{ $errors->first('reason') }}</p>
+                                @endif
+                            @endif
                         </div>
                     @endforeach
                 </div>

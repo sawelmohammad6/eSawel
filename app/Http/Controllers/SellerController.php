@@ -6,6 +6,7 @@ use App\Models\Brand;
 use App\Models\Category;
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Models\ReturnRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -103,7 +104,26 @@ class SellerController extends Controller
             ->latest()
             ->paginate(12);
 
-        return view('seller.orders.index', compact('orderItems'));
+        $returnRequests = ReturnRequest::query()
+            ->whereHas('orderItem', fn ($query) => $query->where('seller_id', $request->user()->id))
+            ->with(['orderItem.order', 'orderItem.seller', 'user'])
+            ->latest()
+            ->get();
+
+        return view('seller.orders.index', compact('orderItems', 'returnRequests'));
+    }
+
+    public function showOrderItem(Request $request, OrderItem $orderItem): View
+    {
+        abort_unless($orderItem->seller_id === $request->user()->id, 403);
+
+        $orderItem->load([
+            'order.user',
+            'product.images',
+            'returnRequest.user',
+        ]);
+
+        return view('seller.orders.show', compact('orderItem'));
     }
 
     public function updateOrderItem(Request $request, OrderItem $orderItem): RedirectResponse
@@ -122,11 +142,17 @@ class SellerController extends Controller
         $statuses = $order->items()->pluck('status');
 
         if ($statuses->every(fn ($status) => $status === 'delivered')) {
-            $order->update([
+            $orderUpdates = [
                 'status' => 'completed',
                 'delivery_status' => 'delivered',
                 'delivered_at' => now(),
-            ]);
+            ];
+
+            if ($order->payment_method === 'cod') {
+                $orderUpdates['payment_status'] = 'paid';
+            }
+
+            $order->update($orderUpdates);
         } elseif ($statuses->contains('shipped')) {
             $order->update([
                 'status' => 'shipping',

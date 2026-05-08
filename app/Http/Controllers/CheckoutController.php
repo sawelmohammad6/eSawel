@@ -11,9 +11,12 @@ use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\Response;
 
 class CheckoutController extends Controller
 {
@@ -48,7 +51,7 @@ class CheckoutController extends Controller
             'postal_code' => ['nullable', 'string', 'max:30'],
             'country' => ['nullable', 'string', 'max:255'],
             'delivery_method' => ['required', 'in:standard,express'],
-            'payment_method' => ['required', 'in:cod,stripe,bkash,sslcommerz'],
+            'payment_method' => ['required', 'in:cod,sslcommerz'],
             'coupon_code' => ['nullable', 'string', 'max:50'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
@@ -110,7 +113,7 @@ class CheckoutController extends Controller
                 'status' => 'processing',
                 'delivery_status' => 'packed',
                 'payment_method' => $validated['payment_method'],
-                'payment_status' => in_array($validated['payment_method'], ['stripe', 'bkash', 'sslcommerz'], true) ? 'paid' : 'pending',
+                'payment_status' => 'pending',
                 'subtotal' => $subtotal,
                 'discount_amount' => $discountAmount,
                 'shipping_amount' => $shippingAmount,
@@ -146,7 +149,7 @@ class CheckoutController extends Controller
 
                 $product->decrement('stock_quantity', $cartItem->quantity);
 
-                if ($product->seller?->sellerProfile) {
+                if ($validated['payment_method'] !== 'sslcommerz' && $product->seller?->sellerProfile) {
                     $commissionAmount = $lineTotal * ((float) $product->seller->sellerProfile->commission_rate / 100);
                     $product->seller->sellerProfile->increment('total_earnings', $lineTotal - $commissionAmount);
                 }
@@ -156,19 +159,34 @@ class CheckoutController extends Controller
                 'order_id' => $order->id,
                 'user_id' => $user->id,
                 'method' => $validated['payment_method'],
-                'provider' => $validated['payment_method'] === 'cod' ? 'cash' : 'demo-gateway',
-                'transaction_id' => 'TXN-'.Str::upper(Str::random(10)),
+                'provider' => $validated['payment_method'] === 'cod' ? 'cash' : 'sslcommerz',
+                'transaction_id' => $validated['payment_method'] === 'cod' ? 'TXN-'.Str::upper(Str::random(10)) : $orderNumber,
                 'amount' => $totalAmount,
                 'currency' => 'BDT',
-                'status' => $validated['payment_method'] === 'cod' ? 'pending' : 'paid',
-                'payload' => ['demo' => true],
-                'paid_at' => $validated['payment_method'] === 'cod' ? null : now(),
+                'status' => 'pending',
+                'payload' => [],
+                'paid_at' => null,
             ]);
 
             $cart->items()->delete();
 
             return $order->load('items.seller');
         });
+
+        if ($validated['payment_method'] === 'sslcommerz') {
+            $gatewayUrl = $this->initiateSslCommerzCheckout($order, $user);
+
+            if (! $gatewayUrl) {
+                $order->update(['payment_status' => 'failed']);
+                $order->payments()->update(['status' => 'failed']);
+
+                return redirect()->route('orders.show', $order)->withErrors([
+                    'payment' => 'Unable to initiate SSLCommerz payment. Please try again.',
+                ]);
+            }
+
+            return redirect()->away($gatewayUrl);
+        }
 
         $sellerUsers = $order->items->pluck('seller')->filter()->unique('id')->values();
         $admins = User::query()->whereIn('role', ['admin', 'sub_admin'])->get();
@@ -182,6 +200,126 @@ class CheckoutController extends Controller
         ]);
 
         return redirect()->route('orders.show', $order)->with('success', 'Order placed successfully.');
+    }
+
+    public function sslCommerzSuccess(Request $request): RedirectResponse
+    {
+        $order = Order::query()->where('order_number', (string) $request->input('tran_id'))->first();
+
+        if (! $order) {
+            return redirect()->route('cart.index')->withErrors(['payment' => 'Order not found for this payment callback.']);
+        }
+
+        $payment = $order->payments()->latest()->first();
+        if (! $payment) {
+            return redirect()->route('orders.show', $order)->withErrors(['payment' => 'Payment record not found.']);
+        }
+
+        $valId = (string) $request->input('val_id');
+        if ($valId === '') {
+            $payment->update([
+                'status' => 'failed',
+                'payload' => ['callback' => $request->all(), 'validation' => []],
+            ]);
+            $order->update(['payment_status' => 'failed']);
+
+            return redirect()->route('orders.show', $order)->withErrors(['payment' => 'Payment validation failed.']);
+        }
+
+        $validation = $this->validateSslCommerzTransaction($valId);
+        $isValid = in_array(strtoupper((string) ($validation['status'] ?? '')), ['VALID', 'VALIDATED'], true);
+        $isMatchingOrder = (string) ($validation['tran_id'] ?? '') === (string) $order->order_number;
+        $isMatchingAmount = (float) ($validation['amount'] ?? 0) == (float) $order->total_amount;
+        $isMatchingCurrency = strtoupper((string) ($validation['currency_type'] ?? '')) === 'BDT';
+
+        if (! $isValid || ! $isMatchingOrder || ! $isMatchingAmount || ! $isMatchingCurrency) {
+            $payment->update([
+                'status' => 'failed',
+                'payload' => ['callback' => $request->all(), 'validation' => $validation],
+            ]);
+            $order->update(['payment_status' => 'failed']);
+
+            return redirect()->route('orders.show', $order)->withErrors(['payment' => 'Payment validation failed.']);
+        }
+
+        if ($payment->status !== 'paid') {
+            $gatewayTransactionId = (string) ($request->input('bank_tran_id') ?: $request->input('val_id') ?: $payment->transaction_id);
+
+            $payment->update([
+                'provider' => 'sslcommerz',
+                'transaction_id' => $gatewayTransactionId,
+                'status' => 'paid',
+                'payload' => ['callback' => $request->all(), 'validation' => $validation],
+                'paid_at' => now(),
+            ]);
+
+            $order->update(['payment_status' => 'paid']);
+            $this->applySellerEarningsForOrder($order);
+
+            $sellerUsers = $order->items()->with('seller')->get()->pluck('seller')->filter()->unique('id')->values();
+            $admins = User::query()->whereIn('role', ['admin', 'sub_admin'])->get();
+            $orderUser = $order->user;
+
+            if ($orderUser) {
+                $this->notifyUsers([$orderUser], 'Payment successful', "Your payment for {$order->order_number} was successful.", route('orders.show', $order), 'success');
+            }
+
+            $this->notifyUsers($sellerUsers, 'New paid order received', 'A paid order includes items from your shop.', route('seller.orders.index'), 'info');
+            $this->notifyUsers($admins, 'New paid marketplace order', "Order {$order->order_number} was paid successfully.", route('admin.orders.index'), 'info');
+        }
+
+        return redirect()->route('orders.show', $order)->with('success', 'Payment completed successfully.');
+    }
+
+    public function sslCommerzFail(Request $request): RedirectResponse
+    {
+        $order = Order::query()->where('order_number', (string) $request->input('tran_id'))->first();
+
+        if (! $order) {
+            return redirect()->route('cart.index')->withErrors(['payment' => 'Payment failed and order was not found.']);
+        }
+
+        $order->update(['payment_status' => 'failed']);
+        $order->payments()->latest()->first()?->update([
+            'status' => 'failed',
+            'payload' => ['callback' => $request->all()],
+        ]);
+
+        return redirect()->route('orders.show', $order)->withErrors(['payment' => 'Payment failed. Please try again.']);
+    }
+
+    public function sslCommerzCancel(Request $request): RedirectResponse
+    {
+        $order = Order::query()->where('order_number', (string) $request->input('tran_id'))->first();
+
+        if (! $order) {
+            return redirect()->route('cart.index')->withErrors(['payment' => 'Payment was cancelled and order was not found.']);
+        }
+
+        $order->update(['payment_status' => 'cancelled']);
+        $order->payments()->latest()->first()?->update([
+            'status' => 'cancelled',
+            'payload' => ['callback' => $request->all()],
+        ]);
+
+        return redirect()->route('orders.show', $order)->withErrors(['payment' => 'Payment cancelled.']);
+    }
+
+    public function sslCommerzIpn(Request $request): Response
+    {
+        $order = Order::query()->where('order_number', (string) $request->input('tran_id'))->first();
+
+        if (! $order) {
+            return response('invalid', 400);
+        }
+
+        if ((string) $order->payment_status !== 'paid') {
+            $order->payments()->latest()->first()?->update([
+                'payload' => ['ipn' => $request->all()],
+            ]);
+        }
+
+        return response('ok', 200);
     }
 
     protected function createAddressFromCheckout(Request $request): Address
@@ -237,5 +375,160 @@ class CheckoutController extends Controller
         }
 
         return [$coupon, round(min($discount, $subtotal), 2)];
+    }
+
+    protected function initiateSslCommerzCheckout(Order $order, User $user): ?string
+    {
+        $storeId = trim((string) config('services.sslcommerz.store_id'));
+        $storePassword = trim((string) config('services.sslcommerz.store_password'));
+        $isSandbox = (bool) config('services.sslcommerz.sandbox', true);
+
+        if ($storeId === '' || $storePassword === '') {
+            return null;
+        }
+
+        $baseUrl = $isSandbox
+            ? 'https://sandbox.sslcommerz.com'
+            : 'https://securepay.sslcommerz.com';
+
+        $shipping = (array) $order->shipping_address;
+        $successUrl = route('payments.sslcommerz.success');
+        $failUrl = route('payments.sslcommerz.fail');
+        $cancelUrl = route('payments.sslcommerz.cancel');
+        $ipnUrl = route('payments.sslcommerz.ipn');
+        $shippingName = (string) ($shipping['recipient_name'] ?? $user->name ?? 'Customer');
+        $shippingAddress1 = (string) ($shipping['address_line_1'] ?? 'Dhaka');
+        $shippingAddress2 = (string) ($shipping['address_line_2'] ?? '');
+        $shippingCity = (string) ($shipping['city'] ?? 'Dhaka');
+        $shippingState = (string) ($shipping['state'] ?? 'Dhaka');
+        $shippingPostcode = (string) ($shipping['postal_code'] ?? '1207');
+        $shippingCountry = (string) ($shipping['country'] ?? 'Bangladesh');
+
+        $payload = [
+            'store_id' => $storeId,
+            'store_passwd' => $storePassword,
+            'total_amount' => (float) $order->total_amount,
+            'currency' => 'BDT',
+            'tran_id' => $order->order_number,
+            'success_url' => $successUrl,
+            'fail_url' => $failUrl,
+            'cancel_url' => $cancelUrl,
+            'ipn_url' => $ipnUrl,
+            'cus_name' => $user->name,
+            'cus_email' => $user->email ?: 'customer@example.com',
+            'cus_add1' => $shippingAddress1,
+            'cus_add2' => $shippingAddress2,
+            'cus_city' => $shippingCity,
+            'cus_state' => $shippingState,
+            'cus_postcode' => $shippingPostcode,
+            'cus_country' => $shippingCountry,
+            'cus_phone' => (string) ($shipping['phone'] ?? ($user->phone ?: '01700000000')),
+            'shipping_method' => 'YES',
+            'ship_name' => $shippingName,
+            'ship_add1' => $shippingAddress1,
+            'ship_add2' => $shippingAddress2,
+            'ship_city' => $shippingCity,
+            'ship_state' => $shippingState,
+            'ship_postcode' => $shippingPostcode,
+            'ship_country' => $shippingCountry,
+            'num_of_item' => max(1, (int) $order->items()->count()),
+            'product_name' => 'Order '.$order->order_number,
+            'product_category' => 'General',
+            'product_profile' => 'general',
+        ];
+
+        Log::info('SSLCommerz initiation request', [
+            'order_number' => $order->order_number,
+            'endpoint' => $baseUrl.'/gwprocess/v4/api.php',
+            'sandbox' => $isSandbox,
+            'total_amount' => $payload['total_amount'],
+            'currency' => $payload['currency'],
+            'tran_id' => $payload['tran_id'],
+            'success_url' => $successUrl,
+            'fail_url' => $failUrl,
+            'cancel_url' => $cancelUrl,
+            'shipping_method' => $payload['shipping_method'],
+        ]);
+
+        try {
+            $response = Http::asForm()
+                ->timeout(20)
+                ->post($baseUrl.'/gwprocess/v4/api.php', $payload);
+        } catch (\Throwable $exception) {
+            Log::error('SSLCommerz initiation request failed', [
+                'order_number' => $order->order_number,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        $data = (array) $response->json();
+
+        Log::info('SSLCommerz initiation response', [
+            'order_number' => $order->order_number,
+            'http_status' => $response->status(),
+            'status' => $data['status'] ?? null,
+            'failedreason' => $data['failedreason'] ?? null,
+            'has_gateway_url' => filled($data['GatewayPageURL'] ?? null),
+        ]);
+
+        if (! $response->ok()) {
+            return null;
+        }
+
+        $gatewayUrl = trim((string) ($data['GatewayPageURL'] ?? ''));
+
+        if ($gatewayUrl === '') {
+            Log::warning('SSLCommerz initiation did not return GatewayPageURL', [
+                'order_number' => $order->order_number,
+                'status' => $data['status'] ?? null,
+                'failedreason' => $data['failedreason'] ?? null,
+            ]);
+
+            return null;
+        }
+
+        return $gatewayUrl;
+    }
+
+    protected function validateSslCommerzTransaction(string $valId): array
+    {
+        $storeId = trim((string) config('services.sslcommerz.store_id'));
+        $storePassword = trim((string) config('services.sslcommerz.store_password'));
+        $isSandbox = (bool) config('services.sslcommerz.sandbox', true);
+
+        if ($valId === '' || $storeId === '' || $storePassword === '') {
+            return [];
+        }
+
+        $baseUrl = $isSandbox
+            ? 'https://sandbox.sslcommerz.com'
+            : 'https://securepay.sslcommerz.com';
+
+        $response = Http::timeout(20)->get($baseUrl.'/validator/api/validationserverAPI.php', [
+            'val_id' => $valId,
+            'store_id' => $storeId,
+            'store_passwd' => $storePassword,
+            'v' => 1,
+            'format' => 'json',
+        ]);
+
+        return $response->ok() ? ((array) $response->json()) : [];
+    }
+
+    protected function applySellerEarningsForOrder(Order $order): void
+    {
+        $order->loadMissing('items.seller.sellerProfile');
+
+        foreach ($order->items as $item) {
+            if (! $item->seller?->sellerProfile) {
+                continue;
+            }
+
+            $lineTotal = (float) $item->total_price;
+            $commissionAmount = $lineTotal * ((float) $item->seller->sellerProfile->commission_rate / 100);
+            $item->seller->sellerProfile->increment('total_earnings', $lineTotal - $commissionAmount);
+        }
     }
 }

@@ -15,6 +15,7 @@ use App\Http\Controllers\SearchController;
 use App\Http\Controllers\SellerController;
 use App\Http\Controllers\StorefrontController;
 use App\Http\Controllers\WishlistController;
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [StorefrontController::class, 'index'])->name('home');
@@ -24,6 +25,19 @@ Route::get('/search/suggestions', [SearchController::class, 'suggestions'])->nam
 Route::get('/search/popular', [SearchController::class, 'popular'])->name('search.popular');
 Route::get('/compare', [CompareController::class, 'index'])->name('compare.index');
 Route::post('/compare/products/{product}', [CompareController::class, 'toggle'])->name('compare.toggle');
+
+Route::match(['GET', 'POST'], '/payments/sslcommerz/success', [CheckoutController::class, 'sslCommerzSuccess'])
+    ->name('payments.sslcommerz.success')
+    ->withoutMiddleware([VerifyCsrfToken::class]);
+Route::match(['GET', 'POST'], '/payments/sslcommerz/fail', [CheckoutController::class, 'sslCommerzFail'])
+    ->name('payments.sslcommerz.fail')
+    ->withoutMiddleware([VerifyCsrfToken::class]);
+Route::match(['GET', 'POST'], '/payments/sslcommerz/cancel', [CheckoutController::class, 'sslCommerzCancel'])
+    ->name('payments.sslcommerz.cancel')
+    ->withoutMiddleware([VerifyCsrfToken::class]);
+Route::match(['GET', 'POST'], '/payments/sslcommerz/ipn', [CheckoutController::class, 'sslCommerzIpn'])
+    ->name('payments.sslcommerz.ipn')
+    ->withoutMiddleware([VerifyCsrfToken::class]);
 
 Route::middleware('guest')->group(function (): void {
     Route::get('/register', [RegisteredUserController::class, 'create'])->name('register');
@@ -75,6 +89,7 @@ Route::prefix('seller')
         Route::put('/products/{product}', [SellerController::class, 'updateProduct'])->name('products.update');
         Route::delete('/products/{product}', [SellerController::class, 'destroyProduct'])->name('products.destroy');
         Route::get('/orders', [SellerController::class, 'ordersIndex'])->name('orders.index');
+        Route::get('/orders/items/{orderItem}', [SellerController::class, 'showOrderItem'])->name('orders.show');
         Route::patch('/orders/items/{orderItem}', [SellerController::class, 'updateOrderItem'])->name('orders.update');
         Route::get('/payouts', [SellerController::class, 'payoutsIndex'])->name('payouts.index');
         Route::post('/payouts', [SellerController::class, 'storePayout'])->name('payouts.store');

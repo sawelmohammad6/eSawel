@@ -41,14 +41,17 @@
                                 <form action="{{ route('admin.orders.update', $order) }}" method="POST" class="flex flex-wrap gap-2">
                                     @csrf
                                     @method('PATCH')
+                                    @php
+                                        $uiStatus = match (true) {
+                                            $order->status === 'cancelled' || $order->delivery_status === 'cancelled' => 'cancelled',
+                                            $order->status === 'completed' || $order->delivery_status === 'delivered' => 'delivered',
+                                            $order->status === 'shipping' || in_array($order->delivery_status, ['in_transit', 'packed'], true) => 'shipped',
+                                            default => 'processing',
+                                        };
+                                    @endphp
                                     <select class="field min-w-40" name="status">
-                                        @foreach (['pending', 'processing', 'shipping', 'completed', 'cancelled'] as $status)
-                                            <option value="{{ $status }}" @selected($order->status === $status)>{{ ucfirst($status) }}</option>
-                                        @endforeach
-                                    </select>
-                                    <select class="field min-w-40" name="delivery_status">
-                                        @foreach (['processing', 'packed', 'in_transit', 'delivered', 'cancelled'] as $status)
-                                            <option value="{{ $status }}" @selected($order->delivery_status === $status)>{{ ucfirst(str_replace('_', ' ', $status)) }}</option>
+                                        @foreach (['processing', 'shipped', 'delivered', 'cancelled'] as $status)
+                                            <option value="{{ $status }}" @selected($uiStatus === $status)>{{ ucfirst($status) }}</option>
                                         @endforeach
                                     </select>
                                     <button class="btn-outline" type="submit">Save</button>
@@ -59,6 +62,45 @@
                 </tbody>
             </table>
             <div class="p-4">{{ $orders->links() }}</div>
+        </div>
+
+        <div class="mt-8">
+            <div class="mb-4">
+                <p class="section-kicker">Returns</p>
+                <h2 class="text-2xl font-black">Return Requests</h2>
+            </div>
+            <div class="table-shell">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Order</th>
+                            <th>Product</th>
+                            <th>Customer</th>
+                            <th>Seller</th>
+                            <th>Reason</th>
+                            <th>Status</th>
+                            <th>Requested At</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse ($returnRequests as $returnRequest)
+                            <tr>
+                                <td>{{ $returnRequest->orderItem?->order?->order_number ?? '-' }}</td>
+                                <td>{{ $returnRequest->orderItem?->product_name ?? '-' }}</td>
+                                <td>{{ $returnRequest->user?->name ?? '-' }}</td>
+                                <td>{{ $returnRequest->orderItem?->seller?->name ?? '-' }}</td>
+                                <td class="max-w-sm whitespace-normal">{{ $returnRequest->reason }}</td>
+                                <td>{{ ucfirst($returnRequest->status) }}</td>
+                                <td>{{ optional($returnRequest->created_at)->format('d M Y, g:i A') }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="7" class="px-4 py-5 text-sm text-slate-500">No return requests yet.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
         </div>
     </section>
 @endsection

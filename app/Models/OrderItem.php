@@ -52,4 +52,9 @@ class OrderItem extends Model
     {
         return $this->hasOne(Review::class);
     }
+
+    public function returnRequest(): HasOne
+    {
+        return $this->hasOne(ReturnRequest::class);
+    }
 }
