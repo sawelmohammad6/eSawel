@@ -14,7 +14,11 @@ class OrderController extends Controller
 {
     public function index(Request $request): View
     {
-        $orders = $request->user()->orders()->withCount('items')->latest()->paginate(12);
+        $orders = $request->user()->orders()
+            ->with(['orderItems.product'])
+            ->withCount('items')
+            ->latest()
+            ->paginate(12);
 
         return view('orders.index', compact('orders'));
     }
@@ -23,7 +27,7 @@ class OrderController extends Controller
     {
         abort_unless($order->user_id === $request->user()->id || $request->user()->isAdmin(), 403);
 
-        $order->load('items.product.images', 'items.returnRequest', 'payments');
+        $order->load('items.product.images', 'items.returnRequest', 'items.deliveryman', 'payments');
 
         return view('orders.show', compact('order'));
     }

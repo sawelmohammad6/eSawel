@@ -102,9 +102,11 @@
 
             <nav class="ml-auto flex flex-wrap items-center gap-3 text-sm font-semibold">
                 @auth
-                    @if ($shoppingDisabled)
+                    @if (auth()->user()->isSeller())
                         <a href="{{ route('seller.dashboard') }}" class="topbar-signup">Seller Panel</a>
                         <a href="{{ route('seller.products.index') }}" class="topbar-link">My products</a>
+                    @elseif (auth()->user()->isDeliveryman())
+                        <a href="{{ route('deliveryman.dashboard') }}" class="topbar-signup">Delivery Panel</a>
                     @else
                         <a href="{{ route('compare.index') }}" class="topbar-link">Compare <span class="rounded-full bg-white/15 px-2 py-1 text-xs">{{ $compareCount }}</span></a>
                     @endif

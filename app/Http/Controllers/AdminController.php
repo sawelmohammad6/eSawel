@@ -7,11 +7,13 @@ use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Coupon;
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\ReturnRequest;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -292,7 +294,7 @@ class AdminController extends Controller
     public function ordersIndex(): View
     {
         $orders = Order::query()
-            ->with('user')
+            ->with('user', 'items.deliveryman')
             ->latest()
             ->paginate(12);
 
@@ -310,17 +312,24 @@ class AdminController extends Controller
         $order->load([
             'user',
             'items.seller',
+            'items.deliveryman',
             'items.product.images',
             'items.returnRequest.user',
         ]);
 
-        return view('admin.orders.show', compact('order'));
+        $deliverymen = User::query()
+            ->where('role', 'deliveryman')
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->get(['id', 'name', 'phone']);
+
+        return view('admin.orders.show', compact('order', 'deliverymen'));
     }
 
     public function updateOrder(Request $request, Order $order): RedirectResponse
     {
         $request->validate([
-            'status' => ['required', 'in:processing,shipped,delivered,cancelled'],
+            'status' => ['required', 'in:processing,packed,out_for_delivery,delivered,failed,returned,cancelled'],
         ]);
 
         $status = (string) $request->input('status');
@@ -330,29 +339,69 @@ class AdminController extends Controller
                 'status' => 'processing',
                 'delivery_status' => 'processing',
             ],
-            'shipped' => [
+            'packed' => [
+                'status' => 'processing',
+                'delivery_status' => 'packed',
+            ],
+            'out_for_delivery' => [
                 'status' => 'shipping',
-                'delivery_status' => 'in_transit',
+                'delivery_status' => 'out_for_delivery',
             ],
             'delivered' => [
                 'status' => 'completed',
                 'delivery_status' => 'delivered',
                 'delivered_at' => now(),
             ],
+            'failed' => [
+                'status' => 'processing',
+                'delivery_status' => 'failed',
+                'delivered_at' => null,
+            ],
+            'returned' => [
+                'status' => 'completed',
+                'delivery_status' => 'returned',
+                'delivered_at' => null,
+            ],
             'cancelled' => [
                 'status' => 'cancelled',
                 'delivery_status' => 'cancelled',
+                'delivered_at' => null,
             ],
         };
 
         if ($status === 'delivered' && $order->payment_method === 'cod') {
             $mappedUpdates['payment_status'] = 'paid';
+            $order->payments()->latest()->first()?->update([
+                'status' => 'paid',
+                'paid_at' => now(),
+            ]);
         }
 
-        if ($status !== 'delivered') {
-            $mappedUpdates['delivered_at'] = $order->delivered_at;
+        if ($status !== 'delivered' && $order->payment_method === 'cod') {
+            $mappedUpdates['payment_status'] = $order->payment_status === 'paid' ? 'pending' : $order->payment_status;
+            $order->payments()->latest()->first()?->update([
+                'status' => $mappedUpdates['payment_status'],
+            ]);
         }
 
+        $itemUpdates = [
+            'status' => $status,
+            'delivery_status' => $status,
+        ];
+
+        if ($status === 'delivered') {
+            $itemUpdates['delivered_at'] = now();
+            if ($order->payment_method === 'cod') {
+                $itemUpdates['payment_collected_at'] = now();
+            }
+        } else {
+            $itemUpdates['delivered_at'] = null;
+            if (in_array($status, ['failed', 'returned', 'cancelled'], true)) {
+                $itemUpdates['payment_collected_at'] = null;
+            }
+        }
+
+        $order->items()->update($itemUpdates);
         $order->update($mappedUpdates);
 
         return back()->with('success', 'Order updated successfully.');
@@ -489,13 +538,128 @@ class AdminController extends Controller
     public function updateUser(Request $request, User $user): RedirectResponse
     {
         $request->validate([
-            'role' => ['required', 'in:customer,seller,admin,sub_admin'],
+            'role' => ['required', 'in:customer,seller,deliveryman,admin,sub_admin'],
             'status' => ['required', 'in:active,pending,blocked'],
         ]);
 
         $user->update($request->only(['role', 'status']));
 
         return back()->with('success', 'User updated successfully.');
+    }
+
+    public function deliverymenIndex(): View
+    {
+        $deliverymen = User::query()
+            ->where('role', 'deliveryman')
+            ->latest()
+            ->paginate(12, ['*'], 'deliverymen_page');
+
+        $assignedDeliveries = OrderItem::query()
+            ->with(['order.user', 'seller', 'deliveryman'])
+            ->whereNotNull('deliveryman_id')
+            ->latest()
+            ->paginate(12, ['*'], 'deliveries_page');
+
+        $completedDeliveries = OrderItem::query()
+            ->with(['order.user', 'seller', 'deliveryman'])
+            ->where('delivery_status', 'delivered')
+            ->latest('delivered_at')
+            ->take(20)
+            ->get();
+
+        return view('admin.deliverymen.index', compact('deliverymen', 'assignedDeliveries', 'completedDeliveries'));
+    }
+
+    public function storeDeliveryman(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'phone' => ['required', 'string', 'max:30', 'unique:users,phone'],
+            'password' => ['required', 'string', 'min:6'],
+            'status' => ['required', 'in:active,pending,blocked'],
+        ]);
+
+        User::query()->create([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'phone' => $validated['phone'],
+            'password' => Hash::make($validated['password']),
+            'role' => 'deliveryman',
+            'status' => $validated['status'],
+        ]);
+
+        return back()->with('success', 'Deliveryman account created successfully.');
+    }
+
+    public function updateDeliveryman(Request $request, User $user): RedirectResponse
+    {
+        abort_unless($user->role === 'deliveryman', 404);
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['nullable', 'email', 'max:255', 'unique:users,email,'.$user->id],
+            'phone' => ['required', 'string', 'max:30', 'unique:users,phone,'.$user->id],
+            'status' => ['required', 'in:active,pending,blocked'],
+            'password' => ['nullable', 'string', 'min:6'],
+        ]);
+
+        $payload = [
+            'name' => $validated['name'],
+            'email' => $validated['email'] ?: null,
+            'phone' => $validated['phone'],
+            'status' => $validated['status'],
+        ];
+
+        if (! empty($validated['password'])) {
+            $payload['password'] = Hash::make($validated['password']);
+        }
+
+        $user->update($payload);
+
+        return back()->with('success', 'Deliveryman account updated successfully.');
+    }
+
+    public function destroyDeliveryman(User $user): RedirectResponse
+    {
+        abort_unless($user->role === 'deliveryman', 404);
+
+        $user->delete();
+
+        return back()->with('success', 'Deliveryman account deleted successfully.');
+    }
+
+    public function assignDeliveryman(Request $request, OrderItem $orderItem): RedirectResponse
+    {
+        $validated = $request->validate([
+            'deliveryman_id' => [
+                'required',
+                Rule::exists('users', 'id')->where(fn ($query) => $query->where('role', 'deliveryman')->where('status', 'active')),
+            ],
+        ]);
+
+        if (in_array((string) $orderItem->delivery_status, ['delivered', 'returned', 'cancelled'], true)) {
+            return back()->withErrors([
+                'deliveryman_id' => 'You cannot reassign delivery for a completed item.',
+            ]);
+        }
+
+        $orderItem->update([
+            'deliveryman_id' => (int) $validated['deliveryman_id'],
+        ]);
+
+        $deliveryman = User::query()->find($validated['deliveryman_id']);
+        if ($deliveryman) {
+            $this->notifyUsers(
+                [$deliveryman],
+                'New delivery assigned',
+                "A new order item {$orderItem->product_name} has been assigned to you.",
+                route('deliveryman.dashboard'),
+                'info'
+            );
+        }
+
+        return back()->with('success', 'Deliveryman assigned successfully.');
     }
 
     public function reportsIndex(): View

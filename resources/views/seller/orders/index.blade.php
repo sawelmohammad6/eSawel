@@ -15,28 +15,67 @@
                         <th>Product</th>
                         <th>Customer</th>
                         <th>Total</th>
-                        <th>Status</th>
+                        <th>Seller Status</th>
+                        <th>Deliveryman</th>
+                        <th>Delivery Status</th>
+                        <th>COD Collection</th>
                         <th>Details</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach ($orderItems as $item)
+                        @php
+                            $isInDeliveryFlow = in_array((string) $item->delivery_status, ['out_for_delivery', 'delivered', 'failed', 'returned', 'cancelled'], true);
+                            $isCompleted = in_array((string) $item->delivery_status, ['delivered', 'returned', 'cancelled'], true);
+                            $isCod = $item->order->payment_method === 'cod';
+                        @endphp
                         <tr>
                             <td>{{ $item->order->order_number }}</td>
                             <td>{{ $item->product_name }}</td>
                             <td>{{ $item->order->user->name }}</td>
                             <td>Tk {{ number_format($item->total_price, 0) }}</td>
                             <td>
-                                <form action="{{ route('seller.orders.update', $item) }}" method="POST" class="flex flex-wrap gap-2">
-                                    @csrf
-                                    @method('PATCH')
-                                    <select class="field min-w-40" name="status">
-                                        @foreach (['processing', 'shipped', 'delivered', 'cancelled'] as $status)
-                                            <option value="{{ $status }}" @selected($item->status === $status)>{{ ucfirst($status) }}</option>
-                                        @endforeach
-                                    </select>
-                                    <button class="btn-outline" type="submit">Save</button>
-                                </form>
+                                @if ($isInDeliveryFlow)
+                                    <span class="text-xs font-semibold text-slate-500">Locked after dispatch</span>
+                                @else
+                                    <form action="{{ route('seller.orders.update', $item) }}" method="POST" class="flex flex-wrap gap-2">
+                                        @csrf
+                                        @method('PATCH')
+                                        <select class="field min-w-40" name="status">
+                                            @foreach (['processing', 'packed'] as $status)
+                                                <option value="{{ $status }}" @selected($item->delivery_status === $status)>{{ ucfirst($status) }}</option>
+                                            @endforeach
+                                        </select>
+                                        <button class="btn-outline" type="submit">Save</button>
+                                    </form>
+                                @endif
+                            </td>
+                            <td>
+                                @if ($isCompleted)
+                                    <span class="text-xs font-semibold text-slate-500">{{ $item->deliveryman?->name ?? 'Not assigned' }}</span>
+                                @elseif ((string) $item->delivery_status === 'processing')
+                                    <span class="text-xs font-semibold text-slate-500">Pack item first</span>
+                                @else
+                                    <form action="{{ route('seller.orders.assign_deliveryman', $item) }}" method="POST" class="flex flex-wrap gap-2">
+                                        @csrf
+                                        @method('PATCH')
+                                        <select class="field min-w-40" name="deliveryman_id" required>
+                                            <option value="">Assign deliveryman</option>
+                                            @foreach ($deliverymen as $deliveryman)
+                                                <option value="{{ $deliveryman->id }}" @selected((int) $item->deliveryman_id === (int) $deliveryman->id)>{{ $deliveryman->name }}</option>
+                                            @endforeach
+                                        </select>
+                                        <button class="btn-outline" type="submit">Assign</button>
+                                    </form>
+                                @endif
+                            </td>
+                            <td>{{ ucfirst(str_replace('_', ' ', (string) $item->delivery_status)) }}</td>
+                            <td>
+                                @if ($isCod)
+                                    {{ $item->payment_collected_at ? 'Collected' : 'Pending' }}
+                                @else
+                                    Prepaid
+                                @endif
                             </td>
                             <td>
                                 <a href="{{ route('seller.orders.show', $item) }}" class="btn-outline whitespace-nowrap">View Details</a>

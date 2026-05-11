@@ -15,6 +15,7 @@ class OrderItem extends Model
         'order_id',
         'product_id',
         'seller_id',
+        'deliveryman_id',
         'product_name',
         'sku',
         'quantity',
@@ -22,6 +23,9 @@ class OrderItem extends Model
         'discount_amount',
         'total_price',
         'status',
+        'delivery_status',
+        'delivered_at',
+        'payment_collected_at',
     ];
 
     protected function casts(): array
@@ -30,6 +34,8 @@ class OrderItem extends Model
             'unit_price' => 'decimal:2',
             'discount_amount' => 'decimal:2',
             'total_price' => 'decimal:2',
+            'delivered_at' => 'datetime',
+            'payment_collected_at' => 'datetime',
         ];
     }
 
@@ -46,6 +52,11 @@ class OrderItem extends Model
     public function seller(): BelongsTo
     {
         return $this->belongsTo(User::class, 'seller_id');
+    }
+
+    public function deliveryman(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'deliveryman_id');
     }
 
     public function review(): HasOne

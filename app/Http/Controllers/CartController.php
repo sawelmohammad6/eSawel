@@ -20,8 +20,8 @@ class CartController extends Controller
     public function index(Request $request): View|RedirectResponse
     {
         if ($request->user()->isShoppingDisabled()) {
-            return redirect()->route('seller.dashboard')
-                ->with('success', 'Seller accounts sell through Seller Panel—customer cart is not used for your shop.');
+            return redirect($this->shoppingDisabledDashboardRoute($request->user()))
+                ->with('success', 'This account type does not use customer cart features.');
         }
 
         $cart = $this->cart($request)->load('items.product.images');
@@ -33,7 +33,7 @@ class CartController extends Controller
     {
         if ($request->user()->isShoppingDisabled()) {
             throw ValidationException::withMessages([
-                'product' => 'Use Seller Panel to list products. Customer cart is for buyers only.',
+                'product' => 'This account type cannot add products to customer cart.',
             ]);
         }
 
@@ -67,7 +67,7 @@ class CartController extends Controller
     {
         if ($request->user()->isShoppingDisabled()) {
             throw ValidationException::withMessages([
-                'product' => 'Use Seller Panel to sell. Checkout is for customers only.',
+                'product' => 'This account type cannot use customer checkout.',
             ]);
         }
 
@@ -81,7 +81,7 @@ class CartController extends Controller
     {
         if ($request->user()->isShoppingDisabled()) {
             throw ValidationException::withMessages([
-                'cart' => 'Seller accounts do not use the customer cart.',
+                'cart' => 'This account type does not use the customer cart.',
             ]);
         }
 
@@ -103,7 +103,7 @@ class CartController extends Controller
     public function destroy(Request $request, CartItem $cartItem): RedirectResponse
     {
         if ($request->user()->isShoppingDisabled()) {
-            return redirect()->route('seller.dashboard');
+            return redirect($this->shoppingDisabledDashboardRoute($request->user()));
         }
 
         abort_unless($cartItem->cart->user_id === $request->user()->id, 403);

@@ -56,6 +56,7 @@ class AuthenticatedSessionController extends Controller
         $redirectRoute = match (true) {
             $user->isAdmin() => 'admin.dashboard',
             $user->isSeller() => 'seller.dashboard',
+            $user->isDeliveryman() => 'deliveryman.dashboard',
             default => 'home',
         };
 

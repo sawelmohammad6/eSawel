@@ -13,8 +13,8 @@ class WishlistController extends Controller
     public function index(Request $request): View|RedirectResponse
     {
         if ($request->user()->isShoppingDisabled()) {
-            return redirect()->route('seller.dashboard')
-                ->with('success', 'Wishlist is for shoppers. List products under Seller Panel → Products.');
+            return redirect($this->shoppingDisabledDashboardRoute($request->user()))
+                ->with('success', 'Wishlist is available for customer accounts only.');
         }
 
         $wishlistItems = $request->user()->wishlistItems()->with('product.images', 'product.brand')->latest()->get();
@@ -26,7 +26,7 @@ class WishlistController extends Controller
     {
         if ($request->user()->isShoppingDisabled()) {
             throw ValidationException::withMessages([
-                'wishlist' => 'Sellers use Seller Panel to manage products, not the wishlist.',
+                'wishlist' => 'This account type cannot use wishlist.',
             ]);
         }
 

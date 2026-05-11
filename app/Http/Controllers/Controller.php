@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\ActivityLog;
+use App\Models\Order;
 use App\Models\Product;
+use App\Models\User;
 use App\Notifications\MarketplaceNotification;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
@@ -110,5 +112,92 @@ abstract class Controller
         }
 
         Notification::send($notifiables, new MarketplaceNotification($title, $body, $url, $kind));
+    }
+
+    protected function syncOrderFromItems(Order $order): void
+    {
+        $order->loadMissing('items', 'payments');
+
+        $items = $order->items;
+        if ($items->isEmpty()) {
+            return;
+        }
+
+        $deliveryStatuses = $items
+            ->map(fn ($item): string => (string) ($item->delivery_status ?: $item->status ?: 'processing'))
+            ->values();
+
+        $status = 'processing';
+        $deliveryStatus = 'processing';
+        $deliveredAt = null;
+
+        if ($deliveryStatuses->every(fn (string $value): bool => $value === 'cancelled')) {
+            $status = 'cancelled';
+            $deliveryStatus = 'cancelled';
+        } elseif ($deliveryStatuses->every(fn (string $value): bool => $value === 'returned')) {
+            $status = 'completed';
+            $deliveryStatus = 'returned';
+        } elseif ($deliveryStatuses->every(fn (string $value): bool => $value === 'delivered')) {
+            $status = 'completed';
+            $deliveryStatus = 'delivered';
+            $deliveredAt = $items
+                ->pluck('delivered_at')
+                ->filter()
+                ->max() ?: now();
+        } elseif ($deliveryStatuses->contains('out_for_delivery') || $deliveryStatuses->contains('in_transit')) {
+            $status = 'shipping';
+            $deliveryStatus = 'out_for_delivery';
+        } elseif ($deliveryStatuses->contains('packed')) {
+            $status = 'processing';
+            $deliveryStatus = 'packed';
+        } elseif ($deliveryStatuses->contains('failed')) {
+            $status = 'processing';
+            $deliveryStatus = 'failed';
+        }
+
+        $orderUpdates = [
+            'status' => $status,
+            'delivery_status' => $deliveryStatus,
+            'delivered_at' => $deliveredAt,
+        ];
+
+        if ($order->payment_method === 'cod') {
+            $isDelivered = $deliveryStatuses->every(fn (string $value): bool => $value === 'delivered');
+            $isCollected = $isDelivered && $items->every(fn ($item): bool => (bool) $item->payment_collected_at);
+
+            if ($isCollected) {
+                $paidAt = $items
+                    ->pluck('payment_collected_at')
+                    ->filter()
+                    ->max() ?: now();
+
+                $orderUpdates['payment_status'] = 'paid';
+                $order->payments()->latest()->first()?->update([
+                    'status' => 'paid',
+                    'paid_at' => $paidAt,
+                ]);
+            } else {
+                $orderUpdates['payment_status'] = 'pending';
+                $order->payments()->latest()->first()?->update([
+                    'status' => 'pending',
+                ]);
+            }
+        }
+
+        $order->update($orderUpdates);
+    }
+
+    protected function shoppingDisabledDashboardRoute(?User $user): string
+    {
+        if (! $user) {
+            return route('home');
+        }
+
+        return match (true) {
+            $user->isDeliveryman() => route('deliveryman.dashboard'),
+            $user->isSeller() => route('seller.dashboard'),
+            $user->isAdmin() => route('admin.dashboard'),
+            default => route('home'),
+        };
     }
 }

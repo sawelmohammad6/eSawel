@@ -86,9 +86,19 @@
                     <h2 class="mt-2 text-3xl font-black">Latest Activity</h2>
                     <div class="mt-6 space-y-4">
                         @forelse ($recentOrders as $order)
+                            @php
+                                $firstOrderItem = $order->orderItems->first();
+                                $firstProductName = $firstOrderItem?->product?->name ?? $firstOrderItem?->product_name;
+                                $remainingCount = max($order->orderItems->count() - 1, 0);
+                            @endphp
                             <a href="{{ route('orders.show', $order) }}" class="block rounded-[22px] bg-[#fff7fa] p-4">
                                 <div class="flex items-center justify-between gap-4">
                                     <div>
+                                        @if ($firstProductName)
+                                            <p class="text-sm text-slate-500">
+                                                {{ $firstProductName }}@if ($remainingCount > 0) (+{{ $remainingCount }} more)@endif
+                                            </p>
+                                        @endif
                                         <p class="font-black">{{ $order->order_number }}</p>
                                         <p class="text-sm text-slate-500">{{ optional($order->placed_at)->format('d M Y') }}</p>
                                     </div>

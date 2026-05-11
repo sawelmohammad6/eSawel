@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\ReturnRequest;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -100,7 +101,7 @@ class SellerController extends Controller
     {
         $orderItems = OrderItem::query()
             ->where('seller_id', $request->user()->id)
-            ->with('order.user', 'product')
+            ->with('order.user', 'product', 'deliveryman')
             ->latest()
             ->paginate(12);
 
@@ -110,7 +111,13 @@ class SellerController extends Controller
             ->latest()
             ->get();
 
-        return view('seller.orders.index', compact('orderItems', 'returnRequests'));
+        $deliverymen = User::query()
+            ->where('role', 'deliveryman')
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->get(['id', 'name', 'phone']);
+
+        return view('seller.orders.index', compact('orderItems', 'returnRequests', 'deliverymen'));
     }
 
     public function showOrderItem(Request $request, OrderItem $orderItem): View
@@ -121,9 +128,16 @@ class SellerController extends Controller
             'order.user',
             'product.images',
             'returnRequest.user',
+            'deliveryman',
         ]);
 
-        return view('seller.orders.show', compact('orderItem'));
+        $deliverymen = User::query()
+            ->where('role', 'deliveryman')
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->get(['id', 'name', 'phone']);
+
+        return view('seller.orders.show', compact('orderItem', 'deliverymen'));
     }
 
     public function updateOrderItem(Request $request, OrderItem $orderItem): RedirectResponse
@@ -131,36 +145,68 @@ class SellerController extends Controller
         abort_unless($orderItem->seller_id === $request->user()->id, 403);
 
         $request->validate([
-            'status' => ['required', 'in:processing,shipped,delivered,cancelled'],
+            'status' => ['required', 'in:processing,packed'],
         ]);
 
-        $orderItem->update([
-            'status' => $request->string('status'),
-        ]);
-
-        $order = $orderItem->order;
-        $statuses = $order->items()->pluck('status');
-
-        if ($statuses->every(fn ($status) => $status === 'delivered')) {
-            $orderUpdates = [
-                'status' => 'completed',
-                'delivery_status' => 'delivered',
-                'delivered_at' => now(),
-            ];
-
-            if ($order->payment_method === 'cod') {
-                $orderUpdates['payment_status'] = 'paid';
-            }
-
-            $order->update($orderUpdates);
-        } elseif ($statuses->contains('shipped')) {
-            $order->update([
-                'status' => 'shipping',
-                'delivery_status' => 'in_transit',
+        if (in_array((string) $orderItem->delivery_status, ['out_for_delivery', 'delivered', 'failed', 'returned', 'cancelled'], true)) {
+            return back()->withErrors([
+                'status' => 'This order item is already in delivery flow. Seller status can no longer be changed.',
             ]);
         }
 
+        $status = (string) $request->input('status');
+
+        $orderItem->update([
+            'status' => $status,
+            'delivery_status' => $status,
+        ]);
+
+        $this->syncOrderFromItems($orderItem->order);
+
         return back()->with('success', 'Order item status updated.');
+    }
+
+    public function assignDeliveryman(Request $request, OrderItem $orderItem): RedirectResponse
+    {
+        abort_unless($orderItem->seller_id === $request->user()->id, 403);
+
+        $validated = $request->validate([
+            'deliveryman_id' => [
+                'required',
+                Rule::exists('users', 'id')->where(fn ($query) => $query->where('role', 'deliveryman')->where('status', 'active')),
+            ],
+        ]);
+
+        $orderItem->loadMissing('order.user');
+
+        if ((string) $orderItem->delivery_status === 'processing') {
+            return back()->withErrors([
+                'deliveryman_id' => 'Please mark this item as packed before assigning a deliveryman.',
+            ]);
+        }
+
+        if (in_array((string) $orderItem->delivery_status, ['delivered', 'returned', 'cancelled'], true)) {
+            return back()->withErrors([
+                'deliveryman_id' => 'You cannot reassign delivery for a completed item.',
+            ]);
+        }
+
+        $orderItem->update([
+            'deliveryman_id' => (int) $validated['deliveryman_id'],
+        ]);
+
+        $deliveryman = User::query()->find($validated['deliveryman_id']);
+        if ($deliveryman) {
+            $this->notifyUsers(
+                [$deliveryman],
+                'New delivery assigned',
+                "A new order item {$orderItem->product_name} has been assigned to you.",
+                route('deliveryman.dashboard'),
+                'info'
+            );
+        }
+
+        return back()->with('success', 'Deliveryman assigned successfully.');
     }
 
     public function payoutsIndex(Request $request): View

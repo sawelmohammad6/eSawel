@@ -23,8 +23,8 @@ class CheckoutController extends Controller
     public function index(Request $request): View|RedirectResponse
     {
         if ($request->user()->isShoppingDisabled()) {
-            return redirect()->route('seller.dashboard')
-                ->with('success', 'Checkout is for customers. Manage sales from Seller Panel → Orders.');
+            return redirect($this->shoppingDisabledDashboardRoute($request->user()))
+                ->with('success', 'Checkout is available for customer accounts only.');
         }
 
         $cart = $request->user()->cart()->firstOrCreate()->load('items.product.images');
@@ -60,7 +60,7 @@ class CheckoutController extends Controller
 
         if ($user->isShoppingDisabled()) {
             throw ValidationException::withMessages([
-                'checkout' => 'Seller accounts cannot place customer orders. Use Seller Panel to fulfill buyer orders.',
+                'checkout' => 'This account type cannot place customer orders.',
             ]);
         }
 
@@ -111,7 +111,7 @@ class CheckoutController extends Controller
                 'delivery_method' => $validated['delivery_method'],
                 'tracking_number' => 'TRK-'.Str::upper(Str::random(8)),
                 'status' => 'processing',
-                'delivery_status' => 'packed',
+                'delivery_status' => 'processing',
                 'payment_method' => $validated['payment_method'],
                 'payment_status' => 'pending',
                 'subtotal' => $subtotal,
@@ -145,6 +145,7 @@ class CheckoutController extends Controller
                     'discount_amount' => 0,
                     'total_price' => $lineTotal,
                     'status' => 'processing',
+                    'delivery_status' => 'processing',
                 ]);
 
                 $product->decrement('stock_quantity', $cartItem->quantity);
@@ -532,3 +533,4 @@ class CheckoutController extends Controller
         }
     }
 }
+

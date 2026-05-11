@@ -11,6 +11,7 @@
             <a href="{{ route('admin.products.index') }}" class="btn-primary">Add / Manage Products</a>
             <a href="{{ route('admin.categories.index') }}" class="btn-outline">Add / Manage Categories</a>
             <a href="{{ route('admin.brands.index') }}" class="btn-outline">Add / Manage Brands</a>
+            <a href="{{ route('admin.deliverymen.index') }}" class="btn-outline">Delivery Management</a>
         </div>
 
         <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

@@ -9,6 +9,7 @@ use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\CompareController;
+use App\Http\Controllers\DeliverymanController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\SearchController;
@@ -91,8 +92,17 @@ Route::prefix('seller')
         Route::get('/orders', [SellerController::class, 'ordersIndex'])->name('orders.index');
         Route::get('/orders/items/{orderItem}', [SellerController::class, 'showOrderItem'])->name('orders.show');
         Route::patch('/orders/items/{orderItem}', [SellerController::class, 'updateOrderItem'])->name('orders.update');
+        Route::patch('/orders/items/{orderItem}/assign-deliveryman', [SellerController::class, 'assignDeliveryman'])->name('orders.assign_deliveryman');
         Route::get('/payouts', [SellerController::class, 'payoutsIndex'])->name('payouts.index');
         Route::post('/payouts', [SellerController::class, 'storePayout'])->name('payouts.store');
+    });
+
+Route::prefix('deliveryman')
+    ->middleware(['auth', 'role:deliveryman,admin,sub_admin'])
+    ->name('deliveryman.')
+    ->group(function (): void {
+        Route::get('/dashboard', [DeliverymanController::class, 'dashboard'])->name('dashboard');
+        Route::patch('/orders/items/{orderItem}', [DeliverymanController::class, 'updateOrderItem'])->name('orders.update');
     });
 
 Route::prefix('admin')
@@ -123,6 +133,12 @@ Route::prefix('admin')
         Route::get('/orders', [AdminController::class, 'ordersIndex'])->name('orders.index');
         Route::get('/orders/{order}', [AdminController::class, 'showOrder'])->name('orders.show');
         Route::patch('/orders/{order}', [AdminController::class, 'updateOrder'])->name('orders.update');
+        Route::patch('/deliveries/items/{orderItem}/assign', [AdminController::class, 'assignDeliveryman'])->name('deliveries.assign');
+
+        Route::get('/deliverymen', [AdminController::class, 'deliverymenIndex'])->name('deliverymen.index');
+        Route::post('/deliverymen', [AdminController::class, 'storeDeliveryman'])->name('deliverymen.store');
+        Route::put('/deliverymen/{user}', [AdminController::class, 'updateDeliveryman'])->name('deliverymen.update');
+        Route::delete('/deliverymen/{user}', [AdminController::class, 'destroyDeliveryman'])->name('deliverymen.destroy');
 
         Route::get('/banners', [AdminController::class, 'bannersIndex'])->name('banners.index');
         Route::post('/banners', [AdminController::class, 'storeBanner'])->name('banners.store');

@@ -28,7 +28,7 @@
                                     @csrf
                                     @method('PATCH')
                                     <select class="field min-w-40" name="role">
-                                        @foreach (['customer', 'seller', 'admin', 'sub_admin'] as $role)
+                                        @foreach (['customer', 'seller', 'deliveryman', 'admin', 'sub_admin'] as $role)
                                             <option value="{{ $role }}" @selected($user->role === $role)>{{ ucfirst(str_replace('_', ' ', $role)) }}</option>
                                         @endforeach
                                     </select>

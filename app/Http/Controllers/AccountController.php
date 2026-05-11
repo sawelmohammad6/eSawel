@@ -13,7 +13,11 @@ class AccountController extends Controller
     public function dashboard(Request $request): View
     {
         $user = $request->user()->load(['addresses', 'notifications']);
-        $recentOrders = $user->orders()->latest()->take(5)->get();
+        $recentOrders = $user->orders()
+            ->with(['orderItems.product'])
+            ->latest()
+            ->take(5)
+            ->get();
         $recentlyViewed = $user->isCustomer()
             ? RecentlyViewedProduct::query()
                 ->where('user_id', $user->id)

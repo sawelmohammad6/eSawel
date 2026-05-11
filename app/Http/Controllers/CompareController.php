@@ -13,8 +13,8 @@ class CompareController extends Controller
     public function index(Request $request): View|RedirectResponse
     {
         if ($request->user()?->isShoppingDisabled()) {
-            return redirect()->route('seller.dashboard')
-                ->with('success', 'Product compare is for shoppers. Manage your catalog in Seller Panel.');
+            return redirect($this->shoppingDisabledDashboardRoute($request->user()))
+                ->with('success', 'Product compare is available for customer accounts only.');
         }
 
         $ids = collect($request->session()->get('compare_products', []))->take(4);
@@ -27,7 +27,7 @@ class CompareController extends Controller
     {
         if ($request->user()?->isShoppingDisabled()) {
             throw ValidationException::withMessages([
-                'compare' => 'Sellers manage listings in Seller Panel—compare is for buyers.',
+                'compare' => 'This account type cannot use product compare.',
             ]);
         }
 
