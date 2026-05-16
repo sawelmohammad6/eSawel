@@ -2,6 +2,11 @@
 
 @section('content')
     <section class="shell">
+        @php
+            $redirectTo = old('redirect_to', request('redirect_to'));
+            $registerUrl = $redirectTo ? route('register', ['redirect_to' => $redirectTo]) : route('register');
+        @endphp
+
         <div class="mx-auto max-w-xl market-card p-8">
             <p class="section-kicker">Account</p>
             <h1 class="mt-2 text-4xl font-black">Log In</h1>
@@ -9,6 +14,9 @@
 
             <form action="{{ route('login.store') }}" method="POST" class="mt-8 space-y-4">
                 @csrf
+                @if ($redirectTo)
+                    <input type="hidden" name="redirect_to" value="{{ $redirectTo }}">
+                @endif
                 <input class="field" type="text" name="login" value="{{ old('login') }}" placeholder="Email or phone">
                 <div class="relative" data-password-wrapper>
                     <input class="field pr-20" type="password" name="password" placeholder="Password" autocomplete="current-password" data-password-input>
@@ -31,7 +39,7 @@
 
             <div class="mt-6 flex items-center justify-between text-sm">
                 <a href="{{ route('password.request') }}" class="font-semibold text-[var(--color-brand-rose)]">Forgot password?</a>
-                <a href="{{ route('register') }}" class="font-semibold text-slate-600">Create account</a>
+                <a href="{{ $registerUrl }}" class="font-semibold text-slate-600">Create account</a>
             </div>
         </div>
     </section>

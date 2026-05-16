@@ -29,6 +29,10 @@
 
             return asset('storage/'.$path);
         };
+        $editingDiscountPercentage = null;
+        if ($editingProduct && (float) $editingProduct->base_price > 0 && $editingProduct->sale_price !== null && (float) $editingProduct->sale_price < (float) $editingProduct->base_price) {
+            $editingDiscountPercentage = round((((float) $editingProduct->base_price - (float) $editingProduct->sale_price) / (float) $editingProduct->base_price) * 100, 2);
+        }
     @endphp
 
     <section class="shell">
@@ -79,7 +83,7 @@
                     <div class="grid grid-cols-2 gap-3">
                         <input class="field" type="number" step="0.01" name="base_price" value="{{ old('base_price', $editingProduct->base_price ?? '') }}" placeholder="Base price">
                         <input class="field" type="number" step="0.01" name="sale_price" value="{{ old('sale_price', $editingProduct->sale_price ?? '') }}" placeholder="Sale price">
-                        <input class="field" type="number" step="0.01" min="0" max="100" name="discount_percentage" value="{{ old('discount_percentage') }}" placeholder="Discount %">
+                        <input class="field" type="number" step="0.01" min="0" max="100" name="discount_percentage" value="{{ old('discount_percentage', $editingDiscountPercentage) }}" placeholder="Discount % (e.g. 10)">
                         <div>
                             <label for="admin-stock-quantity" class="mb-1 block text-sm font-bold text-slate-800">Stock Quantity</label>
                             <input id="admin-stock-quantity" class="field" type="number" min="0" step="1" name="stock_quantity" value="{{ old('stock_quantity', $editingProduct->stock_quantity ?? 0) }}" placeholder="Stock Quantity">

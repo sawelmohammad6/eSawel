@@ -208,12 +208,20 @@ class CheckoutController extends Controller
         $order = Order::query()->where('order_number', (string) $request->input('tran_id'))->first();
 
         if (! $order) {
-            return redirect()->route('cart.index')->withErrors(['payment' => 'Order not found for this payment callback.']);
+            Log::warning('SSLCommerz success callback did not match an order.', [
+                'tran_id' => $request->input('tran_id'),
+            ]);
+
+            return redirect()->route('cart.index');
         }
 
         $payment = $order->payments()->latest()->first();
         if (! $payment) {
-            return redirect()->route('orders.show', $order)->withErrors(['payment' => 'Payment record not found.']);
+            Log::warning('SSLCommerz success callback matched an order without payment record.', [
+                'order_number' => $order->order_number,
+            ]);
+
+            return redirect()->route('orders.show', $order);
         }
 
         $valId = (string) $request->input('val_id');
@@ -224,7 +232,7 @@ class CheckoutController extends Controller
             ]);
             $order->update(['payment_status' => 'failed']);
 
-            return redirect()->route('orders.show', $order)->withErrors(['payment' => 'Payment validation failed.']);
+            return redirect()->route('orders.show', $order);
         }
 
         $validation = $this->validateSslCommerzTransaction($valId);
@@ -240,7 +248,7 @@ class CheckoutController extends Controller
             ]);
             $order->update(['payment_status' => 'failed']);
 
-            return redirect()->route('orders.show', $order)->withErrors(['payment' => 'Payment validation failed.']);
+            return redirect()->route('orders.show', $order);
         }
 
         if ($payment->status !== 'paid') {
@@ -269,7 +277,7 @@ class CheckoutController extends Controller
             $this->notifyUsers($admins, 'New paid marketplace order', "Order {$order->order_number} was paid successfully.", route('admin.orders.index'), 'info');
         }
 
-        return redirect()->route('orders.show', $order)->with('success', 'Payment completed successfully.');
+        return redirect()->route('orders.show', $order);
     }
 
     public function sslCommerzFail(Request $request): RedirectResponse
@@ -277,7 +285,11 @@ class CheckoutController extends Controller
         $order = Order::query()->where('order_number', (string) $request->input('tran_id'))->first();
 
         if (! $order) {
-            return redirect()->route('cart.index')->withErrors(['payment' => 'Payment failed and order was not found.']);
+            Log::warning('SSLCommerz fail callback did not match an order.', [
+                'tran_id' => $request->input('tran_id'),
+            ]);
+
+            return redirect()->route('cart.index');
         }
 
         $order->update(['payment_status' => 'failed']);
@@ -286,7 +298,7 @@ class CheckoutController extends Controller
             'payload' => ['callback' => $request->all()],
         ]);
 
-        return redirect()->route('orders.show', $order)->withErrors(['payment' => 'Payment failed. Please try again.']);
+        return redirect()->route('orders.show', $order);
     }
 
     public function sslCommerzCancel(Request $request): RedirectResponse
@@ -294,7 +306,11 @@ class CheckoutController extends Controller
         $order = Order::query()->where('order_number', (string) $request->input('tran_id'))->first();
 
         if (! $order) {
-            return redirect()->route('cart.index')->withErrors(['payment' => 'Payment was cancelled and order was not found.']);
+            Log::warning('SSLCommerz cancel callback did not match an order.', [
+                'tran_id' => $request->input('tran_id'),
+            ]);
+
+            return redirect()->route('cart.index');
         }
 
         $order->update(['payment_status' => 'cancelled']);
@@ -303,7 +319,7 @@ class CheckoutController extends Controller
             'payload' => ['callback' => $request->all()],
         ]);
 
-        return redirect()->route('orders.show', $order)->withErrors(['payment' => 'Payment cancelled.']);
+        return redirect()->route('orders.show', $order);
     }
 
     public function sslCommerzIpn(Request $request): Response
@@ -533,4 +549,3 @@ class CheckoutController extends Controller
         }
     }
 }
-

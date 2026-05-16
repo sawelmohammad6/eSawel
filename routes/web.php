@@ -17,7 +17,9 @@ use App\Http\Controllers\SellerController;
 use App\Http\Controllers\StorefrontController;
 use App\Http\Controllers\WishlistController;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
+use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
+use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 Route::get('/', [StorefrontController::class, 'index'])->name('home');
 Route::get('/products', [ProductController::class, 'index'])->name('products.index');
@@ -29,16 +31,16 @@ Route::post('/compare/products/{product}', [CompareController::class, 'toggle'])
 
 Route::match(['GET', 'POST'], '/payments/sslcommerz/success', [CheckoutController::class, 'sslCommerzSuccess'])
     ->name('payments.sslcommerz.success')
-    ->withoutMiddleware([VerifyCsrfToken::class]);
+    ->withoutMiddleware([StartSession::class, ShareErrorsFromSession::class, VerifyCsrfToken::class]);
 Route::match(['GET', 'POST'], '/payments/sslcommerz/fail', [CheckoutController::class, 'sslCommerzFail'])
     ->name('payments.sslcommerz.fail')
-    ->withoutMiddleware([VerifyCsrfToken::class]);
+    ->withoutMiddleware([StartSession::class, ShareErrorsFromSession::class, VerifyCsrfToken::class]);
 Route::match(['GET', 'POST'], '/payments/sslcommerz/cancel', [CheckoutController::class, 'sslCommerzCancel'])
     ->name('payments.sslcommerz.cancel')
-    ->withoutMiddleware([VerifyCsrfToken::class]);
+    ->withoutMiddleware([StartSession::class, ShareErrorsFromSession::class, VerifyCsrfToken::class]);
 Route::match(['GET', 'POST'], '/payments/sslcommerz/ipn', [CheckoutController::class, 'sslCommerzIpn'])
     ->name('payments.sslcommerz.ipn')
-    ->withoutMiddleware([VerifyCsrfToken::class]);
+    ->withoutMiddleware([StartSession::class, ShareErrorsFromSession::class, VerifyCsrfToken::class]);
 
 Route::middleware('guest')->group(function (): void {
     Route::get('/register', [RegisteredUserController::class, 'create'])->name('register');
@@ -69,6 +71,7 @@ Route::middleware('auth')->group(function (): void {
 
     Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
     Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
+    Route::get('/orders/{order}/invoice', [OrderController::class, 'invoice'])->name('orders.invoice');
     Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel'])->name('orders.cancel');
     Route::post('/orders/items/{orderItem}/return', [OrderController::class, 'requestReturn'])->name('orders.items.return');
 
@@ -129,6 +132,7 @@ Route::prefix('admin')
 
         Route::get('/sellers', [AdminController::class, 'sellersIndex'])->name('sellers.index');
         Route::post('/sellers/{user}/approve', [AdminController::class, 'approveSeller'])->name('sellers.approve');
+        Route::patch('/sellers/{user}/status', [AdminController::class, 'updateSellerStatus'])->name('sellers.status');
 
         Route::get('/orders', [AdminController::class, 'ordersIndex'])->name('orders.index');
         Route::get('/orders/{order}', [AdminController::class, 'showOrder'])->name('orders.show');
@@ -150,6 +154,9 @@ Route::prefix('admin')
 
         Route::get('/users', [AdminController::class, 'usersIndex'])->name('users.index');
         Route::patch('/users/{user}', [AdminController::class, 'updateUser'])->name('users.update');
+
+        Route::get('/payouts', [AdminController::class, 'payoutsIndex'])->name('payouts.index');
+        Route::patch('/payouts/{payoutRequest}', [AdminController::class, 'updatePayoutStatus'])->name('payouts.update');
 
         Route::get('/reports', [AdminController::class, 'reportsIndex'])->name('reports.index');
     });

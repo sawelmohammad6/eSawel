@@ -7,5 +7,6 @@
     <a href="{{ route('admin.categories.index') }}" class="{{ $pill('admin.categories.*') }}">Categories</a>
     <a href="{{ route('admin.brands.index') }}" class="{{ $pill('admin.brands.*') }}">Brands</a>
     <a href="{{ route('admin.orders.index') }}" class="{{ $pill('admin.orders.*') }}">Orders</a>
+    <a href="{{ route('admin.payouts.index') }}" class="{{ $pill('admin.payouts.*') }}">Payouts</a>
     <a href="{{ route('admin.deliverymen.index') }}" class="{{ $pill('admin.deliverymen.*') }}">Delivery</a>
 </nav>

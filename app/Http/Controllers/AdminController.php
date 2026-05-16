@@ -8,11 +8,13 @@ use App\Models\Category;
 use App\Models\Coupon;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\PayoutRequest;
 use App\Models\Product;
 use App\Models\ReturnRequest;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -20,17 +22,138 @@ use Illuminate\View\View;
 
 class AdminController extends Controller
 {
-    public function dashboard(): View
+    public function dashboard(Request $request): View
     {
+        $selectedMonth = min(12, max(1, $request->integer('month', now()->month)));
+        $selectedYear = max(2000, $request->integer('year', now()->year));
+
+        $availableYears = OrderItem::query()
+            ->where('delivery_status', 'delivered')
+            ->whereNotNull('delivered_at')
+            ->selectRaw('DISTINCT YEAR(delivered_at) as year')
+            ->orderByDesc('year')
+            ->pluck('year')
+            ->map(fn ($year): int => (int) $year)
+            ->filter(fn (int $year): bool => $year > 0)
+            ->values();
+
+        if ($availableYears->isEmpty()) {
+            $availableYears = collect([now()->year]);
+        }
+
+        if (! $availableYears->contains($selectedYear)) {
+            $availableYears = $availableYears->push($selectedYear)->unique()->sortDesc()->values();
+        }
+
+        $deliveredItemsQuery = OrderItem::query()->where('delivery_status', 'delivered');
+        $totalPlatformRevenue = (float) (clone $deliveredItemsQuery)->sum('total_price');
+        $monthlyRevenue = (float) (clone $deliveredItemsQuery)
+            ->whereYear('delivered_at', $selectedYear)
+            ->whereMonth('delivered_at', $selectedMonth)
+            ->sum('total_price');
+        $yearlyRevenue = (float) (clone $deliveredItemsQuery)
+            ->whereYear('delivered_at', $selectedYear)
+            ->sum('total_price');
+
+        $sellerRevenueRows = OrderItem::query()
+            ->selectRaw('
+                users.id as seller_id,
+                users.name as seller_name,
+                users.email as seller_email,
+                users.status as seller_status,
+                seller_profiles.shop_name as shop_name,
+                SUM(order_items.total_price) as revenue,
+                SUM(order_items.quantity) as sold_quantity,
+                COUNT(order_items.id) as sold_items
+            ')
+            ->join('users', 'users.id', '=', 'order_items.seller_id')
+            ->leftJoin('seller_profiles', 'seller_profiles.user_id', '=', 'users.id')
+            ->where('users.role', 'seller')
+            ->where('order_items.delivery_status', 'delivered')
+            ->groupBy('users.id', 'users.name', 'users.email', 'users.status', 'seller_profiles.shop_name')
+            ->orderByDesc('revenue')
+            ->get();
+
+        $sellerList = User::query()
+            ->where('role', 'seller')
+            ->with('sellerProfile')
+            ->orderBy('name')
+            ->get();
+
+        $requestedSellerId = $request->integer('seller_id');
+        $selectedSeller = $requestedSellerId > 0
+            ? $sellerList->firstWhere('id', $requestedSellerId)
+            : null;
+
+        if (! $selectedSeller && $sellerList->isNotEmpty()) {
+            $selectedSeller = $sellerList->first();
+        }
+
+        $selectedSellerAddedProducts = collect();
+        $selectedSellerSoldItems = collect();
+        $selectedSellerRevenue = 0.0;
+        $selectedSellerMonthlyRevenue = 0.0;
+        $selectedSellerYearlyRevenue = 0.0;
+
+        if ($selectedSeller) {
+            $selectedSellerAddedProducts = $selectedSeller->products()
+                ->with('images')
+                ->latest()
+                ->take(8)
+                ->get();
+
+            $sellerDeliveredItemsQuery = OrderItem::query()
+                ->where('seller_id', $selectedSeller->id)
+                ->where('delivery_status', 'delivered');
+
+            $selectedSellerRevenue = (float) (clone $sellerDeliveredItemsQuery)->sum('total_price');
+            $selectedSellerMonthlyRevenue = (float) (clone $sellerDeliveredItemsQuery)
+                ->whereYear('delivered_at', $selectedYear)
+                ->whereMonth('delivered_at', $selectedMonth)
+                ->sum('total_price');
+            $selectedSellerYearlyRevenue = (float) (clone $sellerDeliveredItemsQuery)
+                ->whereYear('delivered_at', $selectedYear)
+                ->sum('total_price');
+
+            $selectedSellerSoldItems = (clone $sellerDeliveredItemsQuery)
+                ->with(['order.user', 'product.images'])
+                ->latest('delivered_at')
+                ->take(8)
+                ->get();
+        }
+
         return view('admin.dashboard', [
             'stats' => [
                 'users' => User::query()->count(),
                 'products' => Product::query()->count(),
                 'orders' => Order::query()->count(),
-                'revenue' => (float) Order::query()->whereIn('payment_status', ['paid', 'pending'])->sum('total_amount'),
+                'revenue' => $totalPlatformRevenue,
             ],
+            'selectedMonth' => $selectedMonth,
+            'selectedYear' => $selectedYear,
+            'availableYears' => $availableYears,
+            'monthlyRevenue' => $monthlyRevenue,
+            'yearlyRevenue' => $yearlyRevenue,
+            'totalPlatformRevenue' => $totalPlatformRevenue,
+            'sellerRevenueRows' => $sellerRevenueRows,
+            'sellerList' => $sellerList,
+            'selectedSeller' => $selectedSeller,
+            'selectedSellerAddedProducts' => $selectedSellerAddedProducts,
+            'selectedSellerSoldItems' => $selectedSellerSoldItems,
+            'selectedSellerRevenue' => $selectedSellerRevenue,
+            'selectedSellerMonthlyRevenue' => $selectedSellerMonthlyRevenue,
+            'selectedSellerYearlyRevenue' => $selectedSellerYearlyRevenue,
             'recentOrders' => Order::query()->with('user')->latest()->take(8)->get(),
             'pendingSellers' => User::query()->where('role', 'seller')->where('status', 'pending')->with('sellerProfile')->take(6)->get(),
+            'pendingPayoutRequests' => PayoutRequest::query()
+                ->with('seller.sellerProfile')
+                ->where('status', 'pending')
+                ->latest()
+                ->take(6)
+                ->get(),
+            'pendingPayoutTotal' => (float) PayoutRequest::query()
+                ->where('status', 'pending')
+                ->sum('amount'),
         ]);
     }
 
@@ -269,11 +392,46 @@ class AdminController extends Controller
         return back()->with('success', 'Product deleted successfully.');
     }
 
-    public function sellersIndex(): View
+    public function sellersIndex(Request $request): View
     {
         $sellers = User::query()->where('role', 'seller')->with('sellerProfile')->latest()->paginate(12);
+        $sellerOptions = User::query()->where('role', 'seller')->with('sellerProfile')->orderBy('name')->get();
 
-        return view('admin.sellers.index', compact('sellers'));
+        $selectedSellerId = $request->integer('seller_id');
+        $selectedSeller = $selectedSellerId > 0
+            ? User::query()->where('role', 'seller')->with('sellerProfile')->find($selectedSellerId)
+            : null;
+
+        if (! $selectedSeller && $sellers->isNotEmpty()) {
+            $selectedSeller = $sellers->first();
+        }
+
+        $addedProducts = collect();
+        $soldProducts = collect();
+        $sellerRevenue = 0.0;
+
+        if ($selectedSeller) {
+            $addedProducts = $selectedSeller->products()
+                ->with('images')
+                ->latest()
+                ->take(8)
+                ->get();
+
+            $soldProducts = OrderItem::query()
+                ->where('seller_id', $selectedSeller->id)
+                ->where('delivery_status', 'delivered')
+                ->with(['order.user', 'product.images'])
+                ->latest('delivered_at')
+                ->take(8)
+                ->get();
+
+            $sellerRevenue = (float) OrderItem::query()
+                ->where('seller_id', $selectedSeller->id)
+                ->where('delivery_status', 'delivered')
+                ->sum('total_price');
+        }
+
+        return view('admin.sellers.index', compact('sellers', 'selectedSeller', 'addedProducts', 'soldProducts', 'sellerRevenue', 'sellerOptions'));
     }
 
     public function approveSeller(User $user): RedirectResponse
@@ -289,6 +447,172 @@ class AdminController extends Controller
         $this->notifyUsers([$user], 'Seller account approved', 'Your seller account is now active.', route('seller.dashboard'), 'success');
 
         return back()->with('success', 'Seller approved successfully.');
+    }
+
+    public function updateSellerStatus(Request $request, User $user): RedirectResponse
+    {
+        abort_unless($user->role === 'seller', 404);
+
+        $validated = $request->validate([
+            'status' => ['required', 'in:active,blocked'],
+        ]);
+
+        $status = (string) $validated['status'];
+        $user->update(['status' => $status]);
+
+        if ($status === 'active') {
+            $user->sellerProfile?->update([
+                'is_approved' => true,
+                'approved_at' => $user->sellerProfile?->approved_at ?? now(),
+            ]);
+
+            $this->notifyUsers([$user], 'Seller account activated', 'Your seller account is active now.', route('seller.dashboard'), 'success');
+
+            return back()->with('success', 'Seller activated successfully.');
+        }
+
+        $this->notifyUsers([$user], 'Seller account deactivated', 'Your seller account was temporarily deactivated by admin.', route('home'), 'warning');
+
+        return back()->with('success', 'Seller deactivated successfully.');
+    }
+
+    public function payoutsIndex(Request $request): View
+    {
+        $statusFilter = (string) $request->string('status')->value();
+        $allowedStatuses = ['pending', 'approved', 'rejected', 'paid'];
+
+        $payoutRequests = PayoutRequest::query()
+            ->with('seller.sellerProfile')
+            ->when(
+                in_array($statusFilter, $allowedStatuses, true),
+                fn ($query) => $query->where('status', $statusFilter)
+            )
+            ->latest()
+            ->paginate(15)
+            ->withQueryString();
+
+        $summary = [
+            'pending' => (float) PayoutRequest::query()->where('status', 'pending')->sum('amount'),
+            'approved' => (float) PayoutRequest::query()->where('status', 'approved')->sum('amount'),
+            'paid' => (float) PayoutRequest::query()->where('status', 'paid')->sum('amount'),
+            'rejected' => (int) PayoutRequest::query()->where('status', 'rejected')->count(),
+        ];
+
+        return view('admin.payouts.index', compact('payoutRequests', 'statusFilter', 'summary'));
+    }
+
+    public function updatePayoutStatus(Request $request, PayoutRequest $payoutRequest): RedirectResponse
+    {
+        $validated = $request->validate([
+            'status' => ['required', 'in:approved,rejected,paid'],
+        ]);
+
+        $targetStatus = (string) $validated['status'];
+        $currentStatus = (string) $payoutRequest->status;
+
+        if (in_array($currentStatus, ['paid', 'rejected'], true)) {
+            return back()->withErrors([
+                'status' => 'This payout request is already finalized and cannot be changed.',
+            ]);
+        }
+
+        if ($targetStatus === 'approved' && $currentStatus !== 'pending') {
+            return back()->withErrors([
+                'status' => 'Only pending requests can be approved.',
+            ]);
+        }
+
+        if ($targetStatus === 'rejected' && ! in_array($currentStatus, ['pending', 'approved'], true)) {
+            return back()->withErrors([
+                'status' => 'Only pending or approved requests can be rejected.',
+            ]);
+        }
+
+        if ($targetStatus === 'paid' && $currentStatus !== 'approved') {
+            return back()->withErrors([
+                'status' => 'Only approved requests can be marked as paid.',
+            ]);
+        }
+
+        if ($targetStatus === 'paid') {
+            DB::transaction(function () use ($payoutRequest): void {
+                $lockedPayout = PayoutRequest::query()
+                    ->whereKey($payoutRequest->id)
+                    ->lockForUpdate()
+                    ->with('seller.sellerProfile')
+                    ->firstOrFail();
+
+                if ((string) $lockedPayout->status !== 'approved') {
+                    throw ValidationException::withMessages([
+                        'status' => 'This payout request is no longer eligible for payment.',
+                    ]);
+                }
+
+                $sellerProfile = $lockedPayout->seller?->sellerProfile;
+
+                if (! $sellerProfile) {
+                    throw ValidationException::withMessages([
+                        'status' => 'Seller payout profile was not found.',
+                    ]);
+                }
+
+                $availableBalance = max(
+                    0,
+                    (float) $sellerProfile->total_earnings - (float) $sellerProfile->total_paid
+                );
+
+                if ((float) $lockedPayout->amount > $availableBalance) {
+                    throw ValidationException::withMessages([
+                        'status' => 'Seller balance is currently insufficient to mark this payout as paid.',
+                    ]);
+                }
+
+                $sellerProfile->increment('total_paid', (float) $lockedPayout->amount);
+
+                $lockedPayout->update([
+                    'status' => 'paid',
+                    'processed_at' => now(),
+                ]);
+            });
+
+            $payoutRequest->refresh()->loadMissing('seller');
+
+            if ($payoutRequest->seller) {
+                $this->notifyUsers(
+                    [$payoutRequest->seller],
+                    'Payout paid',
+                    "Your payout request of Tk ".number_format((float) $payoutRequest->amount, 0)." has been marked as paid.",
+                    route('seller.payouts.index'),
+                    'success'
+                );
+            }
+
+            return back()->with('success', 'Payout request marked as paid.');
+        }
+
+        $payoutRequest->update([
+            'status' => $targetStatus,
+            'processed_at' => now(),
+        ]);
+
+        $payoutRequest->loadMissing('seller');
+
+        if ($payoutRequest->seller) {
+            $notificationTitle = $targetStatus === 'approved' ? 'Payout approved' : 'Payout rejected';
+            $notificationBody = $targetStatus === 'approved'
+                ? "Your payout request of Tk ".number_format((float) $payoutRequest->amount, 0)." has been approved."
+                : "Your payout request of Tk ".number_format((float) $payoutRequest->amount, 0)." has been rejected.";
+
+            $this->notifyUsers(
+                [$payoutRequest->seller],
+                $notificationTitle,
+                $notificationBody,
+                route('seller.payouts.index'),
+                $targetStatus === 'approved' ? 'info' : 'warning'
+            );
+        }
+
+        return back()->with('success', 'Payout request status updated.');
     }
 
     public function ordersIndex(): View
@@ -735,11 +1059,16 @@ class AdminController extends Controller
 
         $imagePaths = array_values(array_filter($uploadedImagePaths));
 
-        $salePrice = $validated['sale_price'] ?? null;
+        $basePrice = (float) $validated['base_price'];
         $discount = isset($validated['discount_percentage']) ? (float) $validated['discount_percentage'] : null;
+        $salePrice = $validated['sale_price'] ?? null;
 
-        if ($salePrice === null && $discount !== null && $discount > 0) {
-            $salePrice = round((float) $validated['base_price'] * (1 - ($discount / 100)), 2);
+        if ($discount !== null && $discount > 0) {
+            $salePrice = round($basePrice * (1 - ($discount / 100)), 2);
+        }
+
+        if ($salePrice !== null && (float) $salePrice >= $basePrice) {
+            $salePrice = null;
         }
 
         $data = [
@@ -753,7 +1082,7 @@ class AdminController extends Controller
             'description' => $validated['description'] ?? null,
             'specifications' => collect(preg_split('/\r\n|\r|\n/', trim((string) ($validated['specifications_text'] ?? ''))))->filter()->values()->all(),
             'attributes' => collect(preg_split('/\r\n|\r|\n/', trim((string) ($validated['attributes_text'] ?? ''))))->filter()->values()->all(),
-            'base_price' => $validated['base_price'],
+            'base_price' => $basePrice,
             'sale_price' => $salePrice,
             'stock_quantity' => $validated['stock_quantity'],
             'low_stock_threshold' => $validated['low_stock_threshold'] ?? 5,

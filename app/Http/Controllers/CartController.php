@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Product;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -52,7 +53,16 @@ class CartController extends Controller
         $cart = $this->cart($request);
         $quantity = $request->integer('quantity', 1);
         $item = $cart->items()->firstOrNew(['product_id' => $product->id]);
-        $item->quantity = min($product->stock_quantity, ($item->exists ? $item->quantity : 0) + $quantity);
+        $existingQuantity = $item->exists ? $item->quantity : 0;
+        $requestedQuantity = $existingQuantity + $quantity;
+
+        if ($requestedQuantity > $product->stock_quantity) {
+            throw ValidationException::withMessages([
+                'quantity' => "Only {$product->stock_quantity} item(s) are available in stock.",
+            ]);
+        }
+
+        $item->quantity = $requestedQuantity;
         $item->unit_price = $product->effective_price;
         $item->save();
 
@@ -77,7 +87,7 @@ class CartController extends Controller
         return redirect()->route('checkout.index');
     }
 
-    public function update(Request $request, CartItem $cartItem): RedirectResponse
+    public function update(Request $request, CartItem $cartItem): RedirectResponse|JsonResponse
     {
         if ($request->user()->isShoppingDisabled()) {
             throw ValidationException::withMessages([
@@ -91,11 +101,58 @@ class CartController extends Controller
             'quantity' => ['required', 'integer', 'min:1'],
         ]);
 
-        $quantity = min($request->integer('quantity'), $cartItem->product->stock_quantity);
+        $product = $cartItem->product;
+        $quantity = $request->integer('quantity');
+
+        if (! $product || $product->stock_quantity < 1) {
+            $message = 'This product is currently out of stock.';
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => $message,
+                    'errors' => ['quantity' => [$message]],
+                    'stock_quantity' => 0,
+                ], 422);
+            }
+
+            throw ValidationException::withMessages([
+                'quantity' => $message,
+            ]);
+        }
+
+        if ($quantity > $product->stock_quantity) {
+            $message = "Only {$product->stock_quantity} item(s) are available in stock.";
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => $message,
+                    'errors' => ['quantity' => [$message]],
+                    'stock_quantity' => (int) $product->stock_quantity,
+                ], 422);
+            }
+
+            throw ValidationException::withMessages([
+                'quantity' => $message,
+            ]);
+        }
+
         $cartItem->update([
             'quantity' => $quantity,
-            'unit_price' => $cartItem->product->effective_price,
+            'unit_price' => $product->effective_price,
         ]);
+
+        if ($request->expectsJson()) {
+            $cart = $cartItem->cart()->with('items')->firstOrFail();
+
+            return response()->json([
+                'message' => 'Cart updated.',
+                'item_id' => $cartItem->id,
+                'item_quantity' => (int) $cartItem->quantity,
+                'item_total' => (float) $cartItem->total,
+                'subtotal' => (float) $cart->subtotal,
+                'items_count' => (int) $cart->items->count(),
+            ]);
+        }
 
         return back()->with('success', 'Cart updated.');
     }

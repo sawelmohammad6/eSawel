@@ -24,6 +24,10 @@
         }
 
         $primaryImage = $images->first()->path;
+        $stockQuantity = max(0, (int) $product->stock_quantity);
+        $oldPrice = $product->sale_price ? (float) $product->base_price : null;
+        $discountPercent = $oldPrice ? round((($oldPrice - $product->effective_price) / $oldPrice) * 100) : null;
+        $loginToBuyUrl = route('login', ['redirect_to' => url()->full()]);
     @endphp
 
     <section class="shell">
@@ -49,13 +53,16 @@
                         <span>|</span>
                         <span>{{ $product->reviews->count() }} review{{ $product->reviews->count() !== 1 ? 's' : '' }}</span>
                         <span>|</span>
-                        <span>{{ $product->stock_quantity > 0 ? 'In Stock' : 'Out of Stock' }}</span>
+                        <span>{{ $stockQuantity > 0 ? 'In Stock ('.$stockQuantity.')' : 'Out of Stock' }}</span>
                     </div>
 
                     <div class="mt-4 flex items-center gap-4">
                         <span class="text-4xl font-black text-[var(--color-brand-rose)]">Tk {{ number_format($product->effective_price, 0) }}</span>
-                        @if ($product->sale_price)
-                            <span class="text-xl text-slate-400 line-through">Tk {{ number_format($product->base_price, 0) }}</span>
+                        @if ($oldPrice)
+                            <span class="text-xl text-slate-400 line-through">Tk {{ number_format($oldPrice, 0) }}</span>
+                        @endif
+                        @if ($discountPercent)
+                            <span class="rounded-full bg-[#fff1f7] px-3 py-1 text-xs font-black text-[var(--color-brand-rose)]">-{{ $discountPercent }}%</span>
                         @endif
                     </div>
 
@@ -72,13 +79,14 @@
 
                     @auth
                         @unless (auth()->user()->isShoppingDisabled())
-                            <form method="POST" action="{{ route('cart.store', $product) }}" class="mt-8 space-y-4">
+                            @if ($stockQuantity > 0)
+                                <form method="POST" action="{{ route('cart.store', $product) }}" class="mt-8 space-y-4">
                                 @csrf
                                 <div class="flex items-center gap-3">
                                     <span class="text-sm font-bold uppercase tracking-[0.25em] text-slate-500">Quantity</span>
                                     <div class="flex items-center gap-2 rounded-full border border-[#ffd5e6] bg-white px-3 py-2">
                                         <button class="rounded-full px-3 py-1 text-xl text-slate-500" type="button" data-qty-toggle="minus" data-qty-target="#product-qty">-</button>
-                                        <input id="product-qty" class="w-12 border-0 bg-transparent text-center font-semibold" type="number" min="1" name="quantity" value="1">
+                                        <input id="product-qty" class="w-12 border-0 bg-transparent text-center font-semibold" type="number" min="1" max="{{ $stockQuantity }}" name="quantity" value="1">
                                         <button class="rounded-full px-3 py-1 text-xl text-slate-500" type="button" data-qty-toggle="plus" data-qty-target="#product-qty">+</button>
                                     </div>
                                 </div>
@@ -88,7 +96,17 @@
                                     <button class="btn-primary" type="submit">Add to Cart</button>
                                     <button class="btn-outline" type="submit" formaction="{{ route('wishlist.toggle', $product) }}">Wishlist</button>
                                 </div>
-                            </form>
+                                </form>
+                            @else
+                                <div class="mt-8 rounded-[24px] border border-[#ffd5e6] bg-white p-5">
+                                    <p class="text-sm font-bold text-slate-800">Out of Stock</p>
+                                    <p class="mt-2 text-sm text-slate-600">This item is currently unavailable. Add it to your wishlist to get notified when stock returns.</p>
+                                    <form method="POST" action="{{ route('wishlist.toggle', $product) }}" class="mt-4">
+                                        @csrf
+                                        <button class="btn-outline" type="submit">Add to Wishlist</button>
+                                    </form>
+                                </div>
+                            @endif
                         @else
                             <div class="mt-8 rounded-[24px] border border-[#ffd5e6] bg-white p-5">
                                 <p class="text-sm font-bold text-slate-800">You’re signed in as a seller</p>
@@ -101,7 +119,11 @@
                         @endunless
                     @else
                         <div class="mt-8">
-                            <a href="{{ route('login') }}" class="btn-primary">Log in to purchase</a>
+                            @if ($stockQuantity > 0)
+                                <a href="{{ $loginToBuyUrl }}" class="btn-primary">Log in to buy</a>
+                            @else
+                                <span class="btn-primary cursor-not-allowed opacity-60">Out of Stock</span>
+                            @endif
                         </div>
                     @endauth
 

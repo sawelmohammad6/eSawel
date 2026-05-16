@@ -6,9 +6,11 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\ReturnRequest;
 use App\Models\User;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\Response;
 
 class OrderController extends Controller
 {
@@ -32,11 +34,29 @@ class OrderController extends Controller
         return view('orders.show', compact('order'));
     }
 
+    public function invoice(Request $request, Order $order): Response
+    {
+        abort_unless($request->user()->isCustomer() && $order->user_id === $request->user()->id, 403);
+        abort_unless((string) $order->payment_status === 'paid', 403);
+
+        $order->load([
+            'user',
+            'items.seller.sellerProfile',
+            'payments' => fn ($query) => $query->latest(),
+        ]);
+
+        $filename = 'invoice-'.preg_replace('/[^A-Za-z0-9_-]+/', '-', $order->order_number).'.pdf';
+
+        return Pdf::loadView('orders.invoice', compact('order'))
+            ->setPaper('a4')
+            ->download($filename);
+    }
+
     public function cancel(Request $request, Order $order): RedirectResponse
     {
         abort_unless($order->user_id === $request->user()->id, 403);
 
-        if (! in_array($order->status, ['pending', 'processing'], true)) {
+        if ((string) $order->status !== 'processing' || (string) $order->delivery_status !== 'processing') {
             return back()->withErrors(['order' => 'This order cannot be cancelled anymore.']);
         }
 

@@ -23,12 +23,51 @@ class SellerController extends Controller
         $orderItems = OrderItem::query()->where('seller_id', $seller->id);
         $ordersCount = (clone $orderItems)->count();
         $revenue = (float) (clone $orderItems)->sum('total_price');
-        $pendingPayouts = $seller->payoutRequests()->where('status', 'pending')->sum('amount');
+        $selectedMonth = min(12, max(1, $request->integer('month', now()->month)));
+        $selectedYear = max(2000, $request->integer('year', now()->year));
+
+        $availableYears = OrderItem::query()
+            ->where('seller_id', $seller->id)
+            ->where('delivery_status', 'delivered')
+            ->whereNotNull('delivered_at')
+            ->selectRaw('DISTINCT YEAR(delivered_at) as year')
+            ->orderByDesc('year')
+            ->pluck('year')
+            ->map(fn ($year): int => (int) $year)
+            ->filter(fn (int $year): bool => $year > 0)
+            ->values();
+
+        if ($availableYears->isEmpty()) {
+            $availableYears = collect([now()->year]);
+        }
+
+        if (! $availableYears->contains($selectedYear)) {
+            $availableYears = $availableYears->push($selectedYear)->unique()->sortDesc()->values();
+        }
+
+        $deliveredItems = OrderItem::query()
+            ->where('seller_id', $seller->id)
+            ->where('delivery_status', 'delivered');
+
+        $monthlyRevenue = (float) (clone $deliveredItems)
+            ->whereYear('delivered_at', $selectedYear)
+            ->whereMonth('delivered_at', $selectedMonth)
+            ->sum('total_price');
+        $yearlyRevenue = (float) (clone $deliveredItems)
+            ->whereYear('delivered_at', $selectedYear)
+            ->sum('total_price');
+
+        $pendingPayouts = $seller->payoutRequests()->whereIn('status', ['pending', 'approved'])->sum('amount');
 
         return view('seller.dashboard', [
             'productsCount' => $productsCount,
             'ordersCount' => $ordersCount,
             'revenue' => $revenue,
+            'monthlyRevenue' => $monthlyRevenue,
+            'yearlyRevenue' => $yearlyRevenue,
+            'selectedMonth' => $selectedMonth,
+            'selectedYear' => $selectedYear,
+            'availableYears' => $availableYears,
             'pendingPayouts' => $pendingPayouts,
             'recentProducts' => $seller->products()->with('images')->latest()->take(5)->get(),
             'recentOrderItems' => $orderItems->with('order.user', 'product')->latest()->take(8)->get(),
@@ -225,12 +264,45 @@ class SellerController extends Controller
             'account_details' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        $request->user()->payoutRequests()->create([
-            'amount' => $request->input('amount'),
+        $seller = $request->user();
+        $availableBalance = max(
+            0,
+            (float) optional($seller->sellerProfile)->total_earnings - (float) optional($seller->sellerProfile)->total_paid
+        );
+
+        if ($seller->payoutRequests()->where('status', 'pending')->exists()) {
+            throw ValidationException::withMessages([
+                'amount' => 'You already have a pending payout request. Please wait for admin review.',
+            ]);
+        }
+
+        $requestedAmount = (float) $request->input('amount');
+
+        if ($requestedAmount > $availableBalance) {
+            throw ValidationException::withMessages([
+                'amount' => 'Requested amount exceeds your available balance.',
+            ]);
+        }
+
+        $seller->payoutRequests()->create([
+            'amount' => $requestedAmount,
             'method' => $request->input('method'),
             'details' => ['account_details' => $request->input('account_details')],
             'status' => 'pending',
         ]);
+
+        $admins = User::query()
+            ->whereIn('role', ['admin', 'sub_admin'])
+            ->where('status', 'active')
+            ->get();
+
+        $this->notifyUsers(
+            $admins,
+            'New payout request',
+            "{$seller->name} requested a payout of Tk ".number_format($requestedAmount, 0).".",
+            route('admin.payouts.index'),
+            'warning'
+        );
 
         return back()->with('success', 'Payout request submitted.');
     }
@@ -263,6 +335,7 @@ class SellerController extends Controller
             'attributes_text' => ['nullable', 'string'],
             'base_price' => ['required', 'numeric', 'min:0'],
             'sale_price' => ['nullable', 'numeric', 'min:0'],
+            'discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'stock_quantity' => ['required', 'integer', 'min:0'],
             'low_stock_threshold' => ['nullable', 'integer', 'min:0'],
             'weight' => ['nullable', 'numeric', 'min:0'],
@@ -291,6 +364,18 @@ class SellerController extends Controller
 
         $imagePaths = array_values(array_filter($uploadedImagePaths));
 
+        $basePrice = (float) $validated['base_price'];
+        $discount = isset($validated['discount_percentage']) ? (float) $validated['discount_percentage'] : null;
+        $salePrice = $validated['sale_price'] ?? null;
+
+        if ($discount !== null && $discount > 0) {
+            $salePrice = round($basePrice * (1 - ($discount / 100)), 2);
+        }
+
+        if ($salePrice !== null && (float) $salePrice >= $basePrice) {
+            $salePrice = null;
+        }
+
         $data = [
             'seller_id' => $sellerId,
             'category_id' => $validated['category_id'],
@@ -302,8 +387,8 @@ class SellerController extends Controller
             'description' => $validated['description'] ?? null,
             'specifications' => collect(preg_split('/\r\n|\r|\n/', trim((string) ($validated['specifications_text'] ?? ''))))->filter()->values()->all(),
             'attributes' => collect(preg_split('/\r\n|\r|\n/', trim((string) ($validated['attributes_text'] ?? ''))))->filter()->values()->all(),
-            'base_price' => $validated['base_price'],
-            'sale_price' => $validated['sale_price'] ?? null,
+            'base_price' => $basePrice,
+            'sale_price' => $salePrice,
             'stock_quantity' => $validated['stock_quantity'],
             'low_stock_threshold' => $validated['low_stock_threshold'] ?? 5,
             'weight' => $validated['weight'] ?? null,

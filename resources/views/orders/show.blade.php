@@ -26,12 +26,18 @@
                     <p class="mt-2 text-slate-500">Tracking: {{ $order->tracking_number }}</p>
                 </div>
 
-                @if (in_array($order->status, ['pending', 'processing']))
-                    <form action="{{ route('orders.cancel', $order) }}" method="POST">
-                        @csrf
-                        <button class="btn-outline" type="submit">Cancel Order</button>
-                    </form>
-                @endif
+                <div class="flex flex-wrap items-center gap-3">
+                    @if (auth()->id() === $order->user_id && auth()->user()->isCustomer() && (string) $order->payment_status === 'paid')
+                        <a href="{{ route('orders.invoice', $order) }}" class="btn-primary">Download Invoice</a>
+                    @endif
+
+                    @if ((string) $order->status === 'processing' && (string) $order->delivery_status === 'processing')
+                        <form action="{{ route('orders.cancel', $order) }}" method="POST">
+                            @csrf
+                            <button class="btn-outline" type="submit">Cancel Order</button>
+                        </form>
+                    @endif
+                </div>
             </div>
 
             <div class="mt-8 grid gap-6 lg:grid-cols-[1fr_320px]">

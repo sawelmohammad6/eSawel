@@ -31,15 +31,32 @@
                         <div class="flex-1">
                             <h2 class="text-xl font-black">{{ $item->product->name }}</h2>
                             <p class="mt-1 text-sm text-slate-500">{{ $item->product->brand?->name }} • {{ $item->product->category?->name }}</p>
-                            <p class="mt-3 text-lg font-black text-[var(--color-brand-rose)]">Tk {{ number_format($item->total, 0) }}</p>
+                            <p class="mt-1 text-xs font-semibold text-slate-500">Available stock: {{ max(0, (int) $item->product->stock_quantity) }}</p>
+                            <p class="mt-3 text-lg font-black text-[var(--color-brand-rose)]" data-cart-item-total="{{ $item->id }}">Tk {{ number_format($item->total, 0) }}</p>
                         </div>
                         <div class="flex flex-col gap-3 sm:items-end">
-                            <form action="{{ route('cart.update', $item) }}" method="POST" class="flex items-center gap-2">
+                            <form
+                                action="{{ route('cart.update', $item) }}"
+                                method="POST"
+                                class="flex items-center gap-2"
+                                data-cart-quantity-form
+                                data-warning-target="#cart-item-warning-{{ $item->id }}"
+                            >
                                 @csrf
                                 @method('PATCH')
-                                <input class="field w-24" type="number" min="1" name="quantity" value="{{ $item->quantity }}">
-                                <button class="btn-outline" type="submit">Update</button>
+                                <input
+                                    class="field w-24"
+                                    type="number"
+                                    min="1"
+                                    max="{{ max(0, (int) $item->product->stock_quantity) }}"
+                                    name="quantity"
+                                    value="{{ $item->quantity }}"
+                                    data-cart-quantity-input
+                                    data-stock-quantity="{{ max(0, (int) $item->product->stock_quantity) }}"
+                                    @disabled((int) $item->product->stock_quantity < 1)
+                                >
                             </form>
+                            <p id="cart-item-warning-{{ $item->id }}" class="hidden text-xs font-semibold text-amber-700"></p>
                             <form action="{{ route('cart.destroy', $item) }}" method="POST">
                                 @csrf
                                 @method('DELETE')
@@ -57,11 +74,11 @@
                 <div class="mt-6 space-y-3 text-sm text-slate-600">
                     <div class="flex items-center justify-between">
                         <span>Items</span>
-                        <span>{{ $cart->items->count() }}</span>
+                        <span data-cart-items-count>{{ $cart->items->count() }}</span>
                     </div>
                     <div class="flex items-center justify-between">
                         <span>Subtotal</span>
-                        <span class="font-black text-slate-900">Tk {{ number_format($cart->subtotal, 0) }}</span>
+                        <span class="font-black text-slate-900" data-cart-subtotal>Tk {{ number_format($cart->subtotal, 0) }}</span>
                     </div>
                     <div class="flex items-center justify-between">
                         <span>Estimated shipping</span>

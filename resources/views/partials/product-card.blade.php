@@ -7,6 +7,8 @@
         : asset('images/placeholder.svg');
     $oldPrice = $product->sale_price ? (float) $product->base_price : null;
     $discountPercent = $oldPrice ? round((($oldPrice - $product->effective_price) / $oldPrice) * 100) : null;
+    $stockQuantity = max(0, (int) $product->stock_quantity);
+    $loginToBuyUrl = route('login', ['redirect_to' => route('products.show', $product)]);
 @endphp
 
 <article class="market-card group flex h-full flex-col overflow-hidden">
@@ -47,7 +49,7 @@
 
         <div class="flex items-center justify-between text-sm text-slate-500">
             <span>{{ $product->average_rating ? number_format($product->average_rating, 1) : 'New' }} rating</span>
-            <span>{{ $product->stock_quantity > 0 ? 'In stock' : 'Out of stock' }}</span>
+            <span>{{ $stockQuantity > 0 ? 'Stock: '.$stockQuantity : 'Out of Stock' }}</span>
         </div>
 
         <div class="mt-auto flex flex-wrap gap-2">
@@ -59,13 +61,19 @@
                     </form>
                     <form action="{{ route('cart.store', $product) }}" method="POST" class="flex-1">
                         @csrf
-                        <button class="btn-primary w-full" type="submit">Add to Cart</button>
+                        <button class="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60" type="submit" @disabled($stockQuantity < 1)>
+                            {{ $stockQuantity < 1 ? 'Out of Stock' : 'Add to Cart' }}
+                        </button>
                     </form>
                 @else
                     <a href="{{ route('seller.products.index') }}" class="btn-primary w-full">List products</a>
                 @endunless
             @else
-                <a href="{{ route('login') }}" class="btn-primary w-full">Log in to buy</a>
+                @if ($stockQuantity < 1)
+                    <span class="btn-primary w-full cursor-not-allowed opacity-60">Out of Stock</span>
+                @else
+                    <a href="{{ $loginToBuyUrl }}" class="btn-primary w-full">Log in to buy</a>
+                @endif
             @endauth
         </div>
     </div>

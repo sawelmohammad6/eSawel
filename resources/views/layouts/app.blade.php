@@ -89,7 +89,9 @@
         <div class="shell flex flex-wrap items-center gap-4 py-4">
             <div class="flex items-center gap-3">
                 <button class="rounded-full border border-white/30 px-3 py-2 text-lg font-bold" data-drawer-open>&#9776;</button>
-                <a href="{{ route('home') }}" class="text-3xl font-black tracking-tight">eSawel</a>
+                <a href="{{ route('home') }}" class="inline-flex shrink-0 items-center">
+                    <img src="/images/logo/esawel-logo.png" alt="eSawel Logo" class="h-14 md:h-16 w-auto object-contain transition-all duration-300 hover:scale-105">
+                </a>
             </div>
 
             <div class="min-w-[260px] flex-1" data-search-box>

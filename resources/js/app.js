@@ -149,10 +149,178 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const current = Number(target.value || 1);
-            const next = button.dataset.qtyToggle === 'minus' ? Math.max(1, current - 1) : current + 1;
+            const min = Math.max(1, Number(target.getAttribute('min') || 1));
+            const max = Number(target.getAttribute('max') || 0);
+            const current = Number(target.value || min);
+            let next = button.dataset.qtyToggle === 'minus' ? current - 1 : current + 1;
+
+            next = Math.max(min, next);
+
+            if (max > 0) {
+                next = Math.min(max, next);
+            }
+
             target.value = next;
+            target.dispatchEvent(new Event('change', { bubbles: true }));
         });
+    });
+
+    document.querySelectorAll('[data-account-type-select]').forEach((select) => {
+        const form = select.closest('form');
+        const sellerFields = form?.querySelector('[data-seller-fields]');
+
+        if (!sellerFields) {
+            return;
+        }
+
+        const toggleSellerFields = () => {
+            const isSeller = select.value === 'seller';
+            sellerFields.hidden = !isSeller;
+        };
+
+        select.addEventListener('change', toggleSellerFields);
+        toggleSellerFields();
+    });
+
+    document.querySelectorAll('[data-cart-quantity-form]').forEach((form) => {
+        const input = form.querySelector('[data-cart-quantity-input]');
+        const warningSelector = form.getAttribute('data-warning-target') || '';
+        const warning = warningSelector ? document.querySelector(warningSelector) : null;
+
+        if (!input) {
+            return;
+        }
+
+        const formatCurrency = (amount) => new Intl.NumberFormat('en-US').format(Math.round(Number(amount || 0)));
+        let lastSyncedQuantity = Number(input.value || 1);
+
+        const showWarning = (message) => {
+            if (!warning) {
+                return;
+            }
+
+            warning.textContent = message;
+            warning.classList.remove('hidden');
+        };
+
+        const hideWarning = () => {
+            if (!warning) {
+                return;
+            }
+
+            warning.textContent = '';
+            warning.classList.add('hidden');
+        };
+
+        const syncQuantity = debounce(async () => {
+            const stockQuantity = Number(input.getAttribute('data-stock-quantity') || 0);
+            const min = Math.max(1, Number(input.getAttribute('min') || 1));
+            const max = Number(input.getAttribute('max') || 0);
+            let quantity = Number(input.value || min);
+
+            if (Number.isNaN(quantity) || quantity < min) {
+                quantity = min;
+            }
+
+            if (stockQuantity < 1) {
+                showWarning('This product is now out of stock.');
+                input.value = String(lastSyncedQuantity);
+
+                return;
+            }
+
+            if (stockQuantity > 0 && quantity > stockQuantity) {
+                quantity = stockQuantity;
+                input.value = String(quantity);
+                showWarning(`Only ${stockQuantity} item(s) are available in stock.`);
+            }
+
+            if (max > 0) {
+                quantity = Math.min(quantity, max);
+                input.value = String(quantity);
+            }
+
+            if (quantity === lastSyncedQuantity) {
+                return;
+            }
+
+            const formData = new FormData(form);
+            formData.set('quantity', String(quantity));
+
+            try {
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: formData,
+                    credentials: 'same-origin',
+                });
+
+                const payload = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    const message = payload?.errors?.quantity?.[0] || payload?.message || 'Unable to update cart quantity.';
+                    showWarning(message);
+
+                    if (typeof payload?.stock_quantity === 'number' && payload.stock_quantity > 0) {
+                        const fallback = Math.max(1, payload.stock_quantity);
+                        input.value = String(fallback);
+                    } else {
+                        input.value = String(lastSyncedQuantity);
+                    }
+
+                    return;
+                }
+
+                lastSyncedQuantity = Number(payload.item_quantity || quantity);
+                input.value = String(lastSyncedQuantity);
+                hideWarning();
+
+                const itemTotalElement = document.querySelector(`[data-cart-item-total="${payload.item_id}"]`);
+                if (itemTotalElement) {
+                    itemTotalElement.textContent = `Tk ${formatCurrency(payload.item_total)}`;
+                }
+
+                const subtotalElement = document.querySelector('[data-cart-subtotal]');
+                if (subtotalElement) {
+                    subtotalElement.textContent = `Tk ${formatCurrency(payload.subtotal)}`;
+                }
+
+                const itemsCountElement = document.querySelector('[data-cart-items-count]');
+                if (itemsCountElement) {
+                    itemsCountElement.textContent = String(payload.items_count ?? itemsCountElement.textContent);
+                }
+            } catch {
+                showWarning('Network error while updating cart. Please try again.');
+                input.value = String(lastSyncedQuantity);
+            }
+        }, 300);
+
+        input.addEventListener('input', syncQuantity);
+        input.addEventListener('change', syncQuantity);
+    });
+
+    document.querySelectorAll('[data-payout-auto-refresh]').forEach((wrapper) => {
+        const interval = Number(wrapper.getAttribute('data-payout-refresh-interval') || 20000);
+
+        if (!Number.isFinite(interval) || interval < 5000) {
+            return;
+        }
+
+        window.setInterval(() => {
+            const active = document.activeElement;
+            const isEditing = !!active
+                && wrapper.contains(active)
+                && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName);
+
+            if (isEditing) {
+                return;
+            }
+
+            window.location.reload();
+        }, interval);
     });
 
     document.querySelectorAll('[data-search-box]').forEach((wrapper) => {
