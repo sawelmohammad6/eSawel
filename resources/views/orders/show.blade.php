@@ -19,6 +19,10 @@
         @endphp
 
         <div class="market-card p-6 lg:p-8">
+            @php
+                $isPointOrder = $order->purchasedWithPoints();
+            @endphp
+
             <div class="flex flex-wrap items-start justify-between gap-4">
                 <div>
                     <p class="section-kicker">Order Details</p>
@@ -31,7 +35,7 @@
                         <a href="{{ route('orders.invoice', $order) }}" class="btn-primary">Download Invoice</a>
                     @endif
 
-                    @if ((string) $order->status === 'processing' && (string) $order->delivery_status === 'processing')
+                    @if (! $isPointOrder && (string) $order->status === 'processing' && (string) $order->delivery_status === 'processing')
                         <form action="{{ route('orders.cancel', $order) }}" method="POST">
                             @csrf
                             <button class="btn-outline" type="submit">Cancel Order</button>
@@ -39,6 +43,12 @@
                     @endif
                 </div>
             </div>
+
+            @if ($isPointOrder)
+                <div class="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
+                    You can't cancel and return the product bought with points.
+                </div>
+            @endif
 
             <div class="mt-8 grid gap-6 lg:grid-cols-[1fr_320px]">
                 <div class="space-y-4">
@@ -51,8 +61,8 @@
                                 $isReceived = $isDeliveredItem && $order->delivery_status === 'delivered' && $order->delivered_at;
                                 $hasReturnRequest = (bool) $item->returnRequest;
                                 $isReturnWindowOpen = $order->delivered_at ? now()->lte($order->delivered_at->copy()->addDays(7)) : false;
-                                $canRequestReturn = ! $hasReturnRequest && ! $isCancelledOrder && $isPaid && $isReceived && $isReturnWindowOpen;
-                                $isReturnWindowExpired = ! $hasReturnRequest && ! $isCancelledOrder && $isPaid && $isReceived && ! $isReturnWindowOpen;
+                                $canRequestReturn = ! $isPointOrder && ! $hasReturnRequest && ! $isCancelledOrder && $isPaid && $isReceived && $isReturnWindowOpen;
+                                $isReturnWindowExpired = ! $isPointOrder && ! $hasReturnRequest && ! $isCancelledOrder && $isPaid && $isReceived && ! $isReturnWindowOpen;
                                 $timelineSteps = ['processing', 'packed', 'out_for_delivery', 'delivered'];
                                 $currentStep = (string) ($item->delivery_status ?: 'processing');
                                 $currentIndex = array_search($currentStep, $timelineSteps, true);
@@ -131,6 +141,7 @@
                         <div class="flex items-center justify-between"><span>Status</span><span>{{ ucfirst($order->status) }}</span></div>
                         <div class="flex items-center justify-between"><span>Delivery</span><span>{{ ucfirst(str_replace('_', ' ', (string) $order->delivery_status)) }}</span></div>
                         <div class="flex items-center justify-between"><span>Payment</span><span>{{ ucfirst($order->payment_status) }}</span></div>
+                        <div class="flex items-center justify-between"><span>Method</span><span>{{ ucfirst(str_replace('_', ' ', (string) $order->payment_method)) }}</span></div>
                         <div class="flex items-center justify-between"><span>Delivered At</span><span>{{ optional($order->delivered_at)->format('d M Y') ?? '-' }}</span></div>
                         <div class="flex items-center justify-between"><span>Total</span><span class="font-black text-slate-900">Tk {{ number_format($order->total_amount, 0) }}</span></div>
                     </div>

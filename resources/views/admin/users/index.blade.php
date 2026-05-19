@@ -14,6 +14,7 @@
                         <th>User</th>
                         <th>Role</th>
                         <th>Status</th>
+                        <th>Points</th>
                         <th>Update</th>
                     </tr>
                 </thead>
@@ -23,6 +24,7 @@
                             <td>{{ $user->name }}<br><span class="text-xs text-slate-400">{{ $user->email }}</span></td>
                             <td>{{ ucfirst(str_replace('_', ' ', $user->role)) }}</td>
                             <td>{{ ucfirst($user->status) }}</td>
+                            <td>{{ number_format((int) $user->reward_points_balance) }}</td>
                             <td>
                                 <form action="{{ route('admin.users.update', $user) }}" method="POST" class="flex flex-wrap gap-2">
                                     @csrf

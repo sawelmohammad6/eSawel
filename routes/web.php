@@ -137,6 +137,7 @@ Route::prefix('admin')
         Route::get('/orders', [AdminController::class, 'ordersIndex'])->name('orders.index');
         Route::get('/orders/{order}', [AdminController::class, 'showOrder'])->name('orders.show');
         Route::patch('/orders/{order}', [AdminController::class, 'updateOrder'])->name('orders.update');
+        Route::patch('/returns/{returnRequest}', [AdminController::class, 'updateReturnRequest'])->name('returns.update');
         Route::patch('/deliveries/items/{orderItem}/assign', [AdminController::class, 'assignDeliveryman'])->name('deliveries.assign');
 
         Route::get('/deliverymen', [AdminController::class, 'deliverymenIndex'])->name('deliverymen.index');

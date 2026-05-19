@@ -27,6 +27,7 @@ class User extends Authenticatable
         'role',
         'status',
         'avatar',
+        'reward_points_balance',
     ];
 
     /**
@@ -50,6 +51,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'last_login_at' => 'datetime',
             'password' => 'hashed',
+            'reward_points_balance' => 'integer',
         ];
     }
 
@@ -86,6 +88,11 @@ class User extends Authenticatable
     public function reviews(): HasMany
     {
         return $this->hasMany(Review::class);
+    }
+
+    public function pointTransactions(): HasMany
+    {
+        return $this->hasMany(PointTransaction::class);
     }
 
     public function payoutRequests(): HasMany

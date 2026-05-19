@@ -18,6 +18,17 @@ class AccountController extends Controller
             ->latest()
             ->take(5)
             ->get();
+        $pointTransactions = $user->pointTransactions()
+            ->latest()
+            ->take(12)
+            ->get();
+        $earnedReturnPoints = (int) $user->pointTransactions()
+            ->whereIn('type', ['return_credit', 'return_refund'])
+            ->where('points', '>', 0)
+            ->sum('points');
+        $usedPoints = abs((int) $user->pointTransactions()
+            ->where('points', '<', 0)
+            ->sum('points'));
         $recentlyViewed = $user->isCustomer()
             ? RecentlyViewedProduct::query()
                 ->where('user_id', $user->id)
@@ -27,7 +38,14 @@ class AccountController extends Controller
                 ->get()
             : collect();
 
-        return view('account.dashboard', compact('user', 'recentOrders', 'recentlyViewed'));
+        return view('account.dashboard', compact(
+            'user',
+            'recentOrders',
+            'pointTransactions',
+            'earnedReturnPoints',
+            'usedPoints',
+            'recentlyViewed'
+        ));
     }
 
     public function updateProfile(Request $request): RedirectResponse

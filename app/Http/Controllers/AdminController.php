@@ -9,9 +9,11 @@ use App\Models\Coupon;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PayoutRequest;
+use App\Models\PointTransaction;
 use App\Models\Product;
 use App\Models\ReturnRequest;
 use App\Models\User;
+use App\Services\PointWalletService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -623,12 +625,19 @@ class AdminController extends Controller
             ->paginate(12);
 
         $returnRequests = ReturnRequest::query()
-            ->with(['orderItem.order', 'orderItem.seller', 'user'])
+            ->with(['orderItem.order', 'orderItem.seller', 'user', 'pointTransaction'])
             ->latest()
             ->take(25)
             ->get();
 
-        return view('admin.orders.index', compact('orders', 'returnRequests'));
+        $pointConversions = PointTransaction::query()
+            ->whereIn('type', ['return_credit', 'return_refund'])
+            ->with(['user', 'returnRequest.orderItem.order'])
+            ->latest()
+            ->take(25)
+            ->get();
+
+        return view('admin.orders.index', compact('orders', 'returnRequests', 'pointConversions'));
     }
 
     public function showOrder(Order $order): View
@@ -650,7 +659,7 @@ class AdminController extends Controller
         return view('admin.orders.show', compact('order', 'deliverymen'));
     }
 
-    public function updateOrder(Request $request, Order $order): RedirectResponse
+    public function updateOrder(Request $request, Order $order, PointWalletService $pointsWallet): RedirectResponse
     {
         $request->validate([
             'status' => ['required', 'in:processing,packed,out_for_delivery,delivered,failed,returned,cancelled'],
@@ -728,7 +737,85 @@ class AdminController extends Controller
         $order->items()->update($itemUpdates);
         $order->update($mappedUpdates);
 
+        if ($status === 'returned' && ! $order->purchasedWithPoints()) {
+            $returnRequests = ReturnRequest::query()
+                ->whereHas('orderItem', fn ($query) => $query->where('order_id', $order->id))
+                ->whereIn('status', ['pending', 'approved'])
+                ->get();
+
+            foreach ($returnRequests as $returnRequest) {
+                $pointsWallet->creditReturnRefund($returnRequest);
+            }
+
+            if ($returnRequests->isNotEmpty()) {
+                return back()->with('success', 'Return approved. Refund converted to reward points.');
+            }
+        }
+
         return back()->with('success', 'Order updated successfully.');
+    }
+
+    public function updateReturnRequest(Request $request, ReturnRequest $returnRequest, PointWalletService $pointsWallet): RedirectResponse
+    {
+        $validated = $request->validate([
+            'status' => ['required', 'in:approved,rejected'],
+        ]);
+
+        $status = (string) $validated['status'];
+
+        if ($status === 'approved') {
+            $pointTransaction = $pointsWallet->creditReturnRefund($returnRequest);
+            $returnRequest->refresh()->load('user', 'orderItem.order');
+            $order = $returnRequest->orderItem?->order;
+            $points = (int) ($pointTransaction?->points ?? 0);
+
+            if ($returnRequest->user) {
+                $this->notifyUsers(
+                    [$returnRequest->user],
+                    'Return approved',
+                    "Your return refund of Tk ".number_format((float) $returnRequest->refund_amount, 0)." was converted to {$points} points.",
+                    $order ? route('orders.show', $order) : route('account.dashboard'),
+                    'success'
+                );
+            }
+
+            $this->logActivity($request->user(), 'return.approved', 'Admin approved a return and credited points.', $returnRequest, [
+                'points' => $points,
+                'refund_amount' => (float) $returnRequest->refund_amount,
+            ]);
+
+            return back()->with('success', 'Return approved. Refund converted to reward points.');
+        }
+
+        DB::transaction(function () use ($returnRequest): void {
+            $lockedReturn = ReturnRequest::query()->lockForUpdate()->findOrFail($returnRequest->id);
+
+            if ((string) $lockedReturn->status === 'approved') {
+                throw ValidationException::withMessages([
+                    'status' => 'Approved returns are already converted to points and cannot be rejected.',
+                ]);
+            }
+
+            $lockedReturn->update([
+                'status' => 'rejected',
+                'approved_at' => null,
+            ]);
+        });
+
+        $returnRequest->refresh()->load('user', 'orderItem.order');
+        $order = $returnRequest->orderItem?->order;
+
+        if ($returnRequest->user) {
+            $this->notifyUsers(
+                [$returnRequest->user],
+                'Return rejected',
+                'Your return request was rejected by admin.',
+                $order ? route('orders.show', $order) : route('account.dashboard'),
+                'warning'
+            );
+        }
+
+        return back()->with('success', 'Return request rejected.');
     }
 
     public function bannersIndex(): View

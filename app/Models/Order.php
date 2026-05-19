@@ -72,4 +72,14 @@ class Order extends Model
     {
         return $this->hasMany(Payment::class);
     }
+
+    public function pointTransactions(): HasMany
+    {
+        return $this->hasMany(PointTransaction::class);
+    }
+
+    public function purchasedWithPoints(): bool
+    {
+        return $this->payment_method === 'points';
+    }
 }

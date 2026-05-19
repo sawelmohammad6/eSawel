@@ -81,6 +81,44 @@
             </div>
 
             <div class="space-y-8">
+                @if ($user->isCustomer())
+                    <div class="market-card p-6">
+                        <p class="section-kicker">Points Wallet</p>
+                        <h2 class="mt-2 text-3xl font-black">{{ number_format((int) $user->reward_points_balance) }} Points</h2>
+                        <p class="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">You can't cancel and return the product bought with points.</p>
+
+                        <div class="mt-5 grid gap-3 sm:grid-cols-2">
+                            <div class="rounded-[22px] bg-[#fff7fa] p-4">
+                                <p class="text-sm text-slate-500">Earned from returns</p>
+                                <p class="mt-1 text-2xl font-black text-[var(--color-brand-rose)]">{{ number_format($earnedReturnPoints) }}</p>
+                            </div>
+                            <div class="rounded-[22px] bg-[#fff7fa] p-4">
+                                <p class="text-sm text-slate-500">Used points</p>
+                                <p class="mt-1 text-2xl font-black text-slate-900">{{ number_format($usedPoints) }}</p>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 space-y-3">
+                            @forelse ($pointTransactions as $transaction)
+                                <div class="rounded-[22px] bg-[#fff7fa] p-4">
+                                    <div class="flex items-center justify-between gap-4">
+                                        <div>
+                                            <p class="font-black">{{ $transaction->description ?? ucfirst(str_replace('_', ' ', $transaction->type)) }}</p>
+                                            <p class="text-sm text-slate-500">{{ optional($transaction->created_at)->format('d M Y, g:i A') }}</p>
+                                        </div>
+                                        <p class="font-black {{ $transaction->points >= 0 ? 'text-[var(--color-brand-rose)]' : 'text-slate-700' }}">
+                                            {{ $transaction->points >= 0 ? '+' : '' }}{{ number_format($transaction->points) }}
+                                        </p>
+                                    </div>
+                                    <p class="mt-1 text-xs text-slate-500">Balance: {{ number_format($transaction->balance_after) }} points</p>
+                                </div>
+                            @empty
+                                <p class="text-slate-500">No point transactions yet.</p>
+                            @endforelse
+                        </div>
+                    </div>
+                @endif
+
                 <div class="market-card p-6">
                     <p class="section-kicker">Recent Orders</p>
                     <h2 class="mt-2 text-3xl font-black">Latest Activity</h2>

@@ -94,8 +94,11 @@
                             <th>Customer</th>
                             <th>Seller</th>
                             <th>Reason</th>
+                            <th>Refund</th>
                             <th>Status</th>
+                            <th>Points</th>
                             <th>Requested At</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -106,12 +109,77 @@
                                 <td>{{ $returnRequest->user?->name ?? '-' }}</td>
                                 <td>{{ $returnRequest->orderItem?->seller?->name ?? '-' }}</td>
                                 <td class="max-w-sm whitespace-normal">{{ $returnRequest->reason }}</td>
+                                <td>Tk {{ number_format($returnRequest->refund_amount, 0) }}</td>
                                 <td>{{ ucfirst($returnRequest->status) }}</td>
+                                <td>
+                                    @if ($returnRequest->pointTransaction)
+                                        {{ number_format($returnRequest->pointTransaction->points) }}
+                                    @else
+                                        -
+                                    @endif
+                                </td>
                                 <td>{{ optional($returnRequest->created_at)->format('d M Y, g:i A') }}</td>
+                                <td>
+                                    @if ((string) $returnRequest->status === 'pending')
+                                        <div class="flex flex-wrap gap-2">
+                                            <form action="{{ route('admin.returns.update', $returnRequest) }}" method="POST">
+                                                @csrf
+                                                @method('PATCH')
+                                                <input type="hidden" name="status" value="approved">
+                                                <button class="btn-outline" type="submit">Approve</button>
+                                            </form>
+                                            <form action="{{ route('admin.returns.update', $returnRequest) }}" method="POST">
+                                                @csrf
+                                                @method('PATCH')
+                                                <input type="hidden" name="status" value="rejected">
+                                                <button class="btn-outline" type="submit">Reject</button>
+                                            </form>
+                                        </div>
+                                    @else
+                                        <span class="text-sm text-slate-500">No action</span>
+                                    @endif
+                                </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="px-4 py-5 text-sm text-slate-500">No return requests yet.</td>
+                                <td colspan="10" class="px-4 py-5 text-sm text-slate-500">No return requests yet.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="mt-8">
+            <div class="mb-4">
+                <p class="section-kicker">Points</p>
+                <h2 class="text-2xl font-black">Return To Point Conversion History</h2>
+            </div>
+            <div class="table-shell">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Customer</th>
+                            <th>Order</th>
+                            <th>Product</th>
+                            <th>Refund</th>
+                            <th>Points</th>
+                            <th>Converted At</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse ($pointConversions as $conversion)
+                            <tr>
+                                <td>{{ $conversion->user?->name ?? '-' }}</td>
+                                <td>{{ $conversion->returnRequest?->orderItem?->order?->order_number ?? ($conversion->metadata['order_number'] ?? '-') }}</td>
+                                <td>{{ $conversion->returnRequest?->orderItem?->product_name ?? '-' }}</td>
+                                <td>Tk {{ number_format((float) ($conversion->metadata['refund_amount'] ?? 0), 0) }}</td>
+                                <td>{{ number_format($conversion->points) }}</td>
+                                <td>{{ optional($conversion->created_at)->format('d M Y, g:i A') }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="6" class="px-4 py-5 text-sm text-slate-500">No return-to-point conversions yet.</td>
                             </tr>
                         @endforelse
                     </tbody>

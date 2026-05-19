@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Payment;
 use App\Models\User;
+use App\Services\PointWalletService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -35,11 +36,20 @@ class CheckoutController extends Controller
 
         $addresses = $request->user()->addresses()->latest()->get();
 
-        return view('checkout.index', compact('cart', 'addresses'));
+        $pointBalance = (int) $request->user()->reward_points_balance;
+        $pointCheckoutEstimate = (int) round(
+            (float) $cart->subtotal + ($addresses->first() ? $this->shippingAmount($addresses->first(), 'standard') : 0)
+        );
+
+        return view('checkout.index', compact('cart', 'addresses', 'pointBalance', 'pointCheckoutEstimate'));
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, PointWalletService $pointsWallet): RedirectResponse
     {
+        if ($request->boolean('point_checkout')) {
+            $request->merge(['payment_method' => 'points']);
+        }
+
         $validated = $request->validate([
             'address_id' => ['nullable', 'integer'],
             'recipient_name' => ['nullable', 'string', 'max:255'],
@@ -51,7 +61,7 @@ class CheckoutController extends Controller
             'postal_code' => ['nullable', 'string', 'max:30'],
             'country' => ['nullable', 'string', 'max:255'],
             'delivery_method' => ['required', 'in:standard,express'],
-            'payment_method' => ['required', 'in:cod,sslcommerz'],
+            'payment_method' => ['required', 'in:cod,sslcommerz,points'],
             'coupon_code' => ['nullable', 'string', 'max:50'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
@@ -80,20 +90,31 @@ class CheckoutController extends Controller
         $shippingAmount = $this->shippingAmount($address, $validated['delivery_method']);
         [$coupon, $discountAmount] = $this->resolveCoupon($validated['coupon_code'] ?? null, $subtotal);
         $totalAmount = max(0, $subtotal + $shippingAmount - $discountAmount);
+        $requiredPoints = $validated['payment_method'] === 'points' ? (int) round($totalAmount) : 0;
         $orderNumber = 'ORD-'.now()->format('Ymd').'-'.Str::upper(Str::random(6));
+
+        if ($validated['payment_method'] === 'points' && (int) $user->reward_points_balance < $requiredPoints) {
+            throw ValidationException::withMessages([
+                'points' => 'You do not have enough points for this order.',
+            ]);
+        }
 
         $order = DB::transaction(function () use (
             $user,
             $cart,
             $address,
             $validated,
+            $pointsWallet,
             $coupon,
             $subtotal,
             $shippingAmount,
             $discountAmount,
             $totalAmount,
+            $requiredPoints,
             $orderNumber
         ) {
+            $isPointPayment = $validated['payment_method'] === 'points';
+
             $order = Order::query()->create([
                 'user_id' => $user->id,
                 'coupon_id' => $coupon?->id,
@@ -113,7 +134,7 @@ class CheckoutController extends Controller
                 'status' => 'processing',
                 'delivery_status' => 'processing',
                 'payment_method' => $validated['payment_method'],
-                'payment_status' => 'pending',
+                'payment_status' => $isPointPayment ? 'paid' : 'pending',
                 'subtotal' => $subtotal,
                 'discount_amount' => $discountAmount,
                 'shipping_amount' => $shippingAmount,
@@ -160,14 +181,26 @@ class CheckoutController extends Controller
                 'order_id' => $order->id,
                 'user_id' => $user->id,
                 'method' => $validated['payment_method'],
-                'provider' => $validated['payment_method'] === 'cod' ? 'cash' : 'sslcommerz',
-                'transaction_id' => $validated['payment_method'] === 'cod' ? 'TXN-'.Str::upper(Str::random(10)) : $orderNumber,
+                'provider' => match ($validated['payment_method']) {
+                    'cod' => 'cash',
+                    'points' => 'reward_points',
+                    default => 'sslcommerz',
+                },
+                'transaction_id' => match ($validated['payment_method']) {
+                    'cod' => 'TXN-'.Str::upper(Str::random(10)),
+                    'points' => 'PTS-'.Str::upper(Str::random(10)),
+                    default => $orderNumber,
+                },
                 'amount' => $totalAmount,
                 'currency' => 'BDT',
-                'status' => 'pending',
+                'status' => $isPointPayment ? 'paid' : 'pending',
                 'payload' => [],
-                'paid_at' => null,
+                'paid_at' => $isPointPayment ? now() : null,
             ]);
+
+            if ($isPointPayment) {
+                $pointsWallet->debitForOrder($user, $order, $requiredPoints);
+            }
 
             $cart->items()->delete();
 

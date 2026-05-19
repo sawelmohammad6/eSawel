@@ -56,6 +56,10 @@ class OrderController extends Controller
     {
         abort_unless($order->user_id === $request->user()->id, 403);
 
+        if ($order->purchasedWithPoints()) {
+            return back()->withErrors(['order' => "You can't cancel and return the product bought with points."]);
+        }
+
         if ((string) $order->status !== 'processing' || (string) $order->delivery_status !== 'processing') {
             return back()->withErrors(['order' => 'This order cannot be cancelled anymore.']);
         }
@@ -90,6 +94,12 @@ class OrderController extends Controller
         ]);
 
         $order = $orderItem->order;
+
+        if ($order->purchasedWithPoints()) {
+            return back()
+                ->withErrors(['return' => "You can't cancel and return the product bought with points."])
+                ->withInput();
+        }
 
         if ($orderItem->status !== 'delivered') {
             return back()

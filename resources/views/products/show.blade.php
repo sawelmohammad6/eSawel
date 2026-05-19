@@ -28,6 +28,9 @@
         $oldPrice = $product->sale_price ? (float) $product->base_price : null;
         $discountPercent = $oldPrice ? round((($oldPrice - $product->effective_price) / $oldPrice) * 100) : null;
         $loginToBuyUrl = route('login', ['redirect_to' => url()->full()]);
+        $canExchangeWithPoints = auth()->check()
+            && ! auth()->user()->isShoppingDisabled()
+            && (int) auth()->user()->reward_points_balance >= (int) round((float) $product->effective_price);
     @endphp
 
     <section class="shell">
@@ -93,6 +96,9 @@
 
                                 <div class="flex flex-wrap gap-3">
                                     <button class="btn-secondary" type="submit" formaction="{{ route('cart.buy_now', $product) }}">Buy Now</button>
+                                    @if ($canExchangeWithPoints)
+                                        <button class="btn-outline" type="submit" name="point_checkout" value="1" formaction="{{ route('cart.buy_now', $product) }}">Exchange with Points</button>
+                                    @endif
                                     <button class="btn-primary" type="submit">Add to Cart</button>
                                     <button class="btn-outline" type="submit" formaction="{{ route('wishlist.toggle', $product) }}">Wishlist</button>
                                 </div>

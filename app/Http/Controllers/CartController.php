@@ -84,6 +84,10 @@ class CartController extends Controller
         $request->merge(['quantity' => $request->integer('quantity', 1)]);
         $this->store($request, $product);
 
+        if ($request->boolean('point_checkout')) {
+            return redirect()->route('checkout.index', ['payment_method' => 'points']);
+        }
+
         return redirect()->route('checkout.index');
     }
 

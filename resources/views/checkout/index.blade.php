@@ -19,6 +19,11 @@
         @endphp
 
         <div class="grid gap-8 lg:grid-cols-[1fr_380px]">
+            @php
+                $estimatedPointTotal = $pointCheckoutEstimate;
+                $canExchangeWithPoints = $pointBalance >= $estimatedPointTotal && $estimatedPointTotal > 0;
+            @endphp
+
             <form action="{{ route('checkout.store') }}" method="POST" class="market-card p-6 lg:p-8">
                 @csrf
                 <p class="section-kicker">Checkout</p>
@@ -71,6 +76,25 @@
                                 <option value="sslcommerz">SSLCommerz</option>
                             </select>
                         </div>
+                    </div>
+
+                    <div class="rounded-[24px] border border-[#ffd6e5] bg-[#fff7fa] p-4">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <p class="text-sm font-bold uppercase tracking-[0.25em] text-slate-500">Points Wallet</p>
+                                <p class="mt-1 text-2xl font-black text-[var(--color-brand-rose)]">{{ number_format($pointBalance) }} points</p>
+                            </div>
+                            @if ($canExchangeWithPoints)
+                                <button class="btn-outline" type="submit" name="point_checkout" value="1">Exchange with Points</button>
+                            @endif
+                        </div>
+                        <p class="mt-3 text-sm font-semibold text-amber-700">You can't cancel and return the product bought with points.</p>
+                        @unless ($canExchangeWithPoints)
+                            <p class="mt-2 text-sm text-slate-500">You need at least {{ number_format($estimatedPointTotal) }} points to exchange this cart.</p>
+                        @endunless
+                        @error('points')
+                            <p class="mt-2 text-sm font-semibold text-red-600">{{ $message }}</p>
+                        @enderror
                     </div>
 
                     <input class="field" type="text" name="coupon_code" placeholder="Coupon code">
