@@ -140,9 +140,13 @@
                     <div class="mt-4 space-y-3 text-sm text-slate-600">
                         <div class="flex items-center justify-between"><span>Status</span><span>{{ ucfirst($order->status) }}</span></div>
                         <div class="flex items-center justify-between"><span>Delivery</span><span>{{ ucfirst(str_replace('_', ' ', (string) $order->delivery_status)) }}</span></div>
+                        <div class="flex items-center justify-between"><span>Delivery Method</span><span>{{ ucfirst(str_replace('_', ' ', (string) $order->delivery_method)) }}</span></div>
                         <div class="flex items-center justify-between"><span>Payment</span><span>{{ ucfirst($order->payment_status) }}</span></div>
                         <div class="flex items-center justify-between"><span>Method</span><span>{{ ucfirst(str_replace('_', ' ', (string) $order->payment_method)) }}</span></div>
                         <div class="flex items-center justify-between"><span>Delivered At</span><span>{{ optional($order->delivered_at)->format('d M Y') ?? '-' }}</span></div>
+                        <div class="flex items-center justify-between"><span>Subtotal</span><span>Tk {{ number_format((float) $order->subtotal, 0) }}</span></div>
+                        <div class="flex items-center justify-between"><span>Discount</span><span>-Tk {{ number_format((float) $order->discount_amount, 0) }}</span></div>
+                        <div class="flex items-center justify-between"><span>Shipping</span><span>Tk {{ number_format((float) $order->shipping_amount, 0) }}</span></div>
                         <div class="flex items-center justify-between"><span>Total</span><span class="font-black text-slate-900">Tk {{ number_format($order->total_amount, 0) }}</span></div>
                     </div>
                 </aside>

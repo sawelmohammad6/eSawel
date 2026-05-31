@@ -12,6 +12,7 @@ class PayoutRequest extends Model
 
     protected $fillable = [
         'seller_id',
+        'requester_role',
         'amount',
         'method',
         'details',
@@ -31,5 +32,20 @@ class PayoutRequest extends Model
     public function seller(): BelongsTo
     {
         return $this->belongsTo(User::class, 'seller_id');
+    }
+
+    public function requester(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'seller_id');
+    }
+
+    public function deliveryman(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'seller_id');
+    }
+
+    public function isDeliverymanRequest(): bool
+    {
+        return $this->requester_role === 'deliveryman';
     }
 }

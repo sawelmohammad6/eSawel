@@ -2,13 +2,21 @@
 
 @section('content')
     <section class="shell">
+        <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <div>
+                <p class="section-kicker">Deliveryman Panel</p>
+                <h1 class="section-title">Payouts</h1>
+            </div>
+            <a href="{{ route('deliveryman.dashboard') }}" class="btn-outline">Back to Deliveries</a>
+        </div>
+
         <div class="grid gap-8 xl:grid-cols-[380px_1fr]">
             <div class="market-card p-6">
                 <p class="section-kicker">Payouts</p>
-                <h1 class="mt-2 text-3xl font-black">Request Withdrawal</h1>
+                <h2 class="mt-2 text-3xl font-black">Request Withdrawal</h2>
                 <p class="mt-2 text-slate-500">Available balance: Tk {{ number_format($availableBalance, 0) }}</p>
 
-                <form action="{{ route('seller.payouts.store') }}" method="POST" class="mt-6 space-y-4">
+                <form action="{{ route('deliveryman.payouts.store') }}" method="POST" class="mt-6 space-y-4">
                     @csrf
                     <input class="field" type="number" step="0.01" min="1" name="amount" value="{{ old('amount') }}" placeholder="Amount">
                     <select class="field" name="method">

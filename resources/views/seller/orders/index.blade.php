@@ -4,7 +4,12 @@
     <section class="shell">
         <div class="mb-6">
             <p class="section-kicker">Seller Orders</p>
-            <h1 class="section-title">Order Items</h1>
+            <div class="flex flex-wrap items-center gap-3">
+                <h1 class="section-title">Order Items</h1>
+                @if ($sellerNewOrdersCount > 0)
+                    <span class="rounded-full bg-red-500 px-3 py-1 text-sm font-black text-white">{{ $sellerNewOrdersCount }} New</span>
+                @endif
+            </div>
         </div>
 
         <div class="table-shell">
@@ -31,7 +36,14 @@
                         @endphp
                         <tr>
                             <td>{{ $item->order->order_number }}</td>
-                            <td>{{ $item->product_name }}</td>
+                            <td>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span>{{ $item->product_name }}</span>
+                                    @if ($sellerNewOrderItemIds->contains((int) $item->id))
+                                        <span class="rounded-full bg-red-100 px-2 py-0.5 text-xs font-black text-red-600">New</span>
+                                    @endif
+                                </div>
+                            </td>
                             <td>{{ $item->order->user->name }}</td>
                             <td>Tk {{ number_format($item->total_price, 0) }}</td>
                             <td>

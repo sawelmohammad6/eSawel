@@ -86,8 +86,16 @@
                             <span class="font-semibold">{{ ucfirst(str_replace('_', ' ', (string) $order->delivery_status)) }}</span>
                         </div>
                         <div class="flex items-center justify-between">
+                            <span>Delivery Method</span>
+                            <span class="font-semibold">{{ ucfirst(str_replace('_', ' ', (string) $order->delivery_method)) }}</span>
+                        </div>
+                        <div class="flex items-center justify-between">
                             <span>Order Status</span>
                             <span class="font-semibold">{{ ucfirst($order->status) }}</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span>Shipping</span>
+                            <span class="font-semibold">Tk {{ number_format((float) $order->shipping_amount, 0) }}</span>
                         </div>
                         <div class="flex items-center justify-between pt-2 text-base">
                             <span>Total Amount</span>

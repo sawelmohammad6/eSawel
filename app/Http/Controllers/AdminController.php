@@ -13,6 +13,7 @@ use App\Models\PointTransaction;
 use App\Models\Product;
 use App\Models\ReturnRequest;
 use App\Models\User;
+use App\Services\DeliveryChargeService;
 use App\Services\PointWalletService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -148,7 +149,7 @@ class AdminController extends Controller
             'recentOrders' => Order::query()->with('user')->latest()->take(8)->get(),
             'pendingSellers' => User::query()->where('role', 'seller')->where('status', 'pending')->with('sellerProfile')->take(6)->get(),
             'pendingPayoutRequests' => PayoutRequest::query()
-                ->with('seller.sellerProfile')
+                ->with('requester.sellerProfile')
                 ->where('status', 'pending')
                 ->latest()
                 ->take(6)
@@ -484,7 +485,7 @@ class AdminController extends Controller
         $allowedStatuses = ['pending', 'approved', 'rejected', 'paid'];
 
         $payoutRequests = PayoutRequest::query()
-            ->with('seller.sellerProfile')
+            ->with('requester.sellerProfile')
             ->when(
                 in_array($statusFilter, $allowedStatuses, true),
                 fn ($query) => $query->where('status', $statusFilter)
@@ -541,7 +542,7 @@ class AdminController extends Controller
                 $lockedPayout = PayoutRequest::query()
                     ->whereKey($payoutRequest->id)
                     ->lockForUpdate()
-                    ->with('seller.sellerProfile')
+                    ->with('requester.sellerProfile')
                     ->firstOrFail();
 
                 if ((string) $lockedPayout->status !== 'approved') {
@@ -550,26 +551,45 @@ class AdminController extends Controller
                     ]);
                 }
 
-                $sellerProfile = $lockedPayout->seller?->sellerProfile;
+                $requester = $lockedPayout->requester;
 
-                if (! $sellerProfile) {
+                if (! $requester) {
                     throw ValidationException::withMessages([
-                        'status' => 'Seller payout profile was not found.',
+                        'status' => 'Payout requester was not found.',
                     ]);
                 }
 
-                $availableBalance = max(
-                    0,
-                    (float) $sellerProfile->total_earnings - (float) $sellerProfile->total_paid
-                );
+                if ($lockedPayout->isDeliverymanRequest()) {
+                    $availableBalance = max(
+                        0,
+                        (float) $requester->delivery_earnings_total - (float) $requester->delivery_paid_total
+                    );
+                } else {
+                    $sellerProfile = $requester->sellerProfile;
+
+                    if (! $sellerProfile) {
+                        throw ValidationException::withMessages([
+                            'status' => 'Seller payout profile was not found.',
+                        ]);
+                    }
+
+                    $availableBalance = max(
+                        0,
+                        (float) $sellerProfile->total_earnings - (float) $sellerProfile->total_paid
+                    );
+                }
 
                 if ((float) $lockedPayout->amount > $availableBalance) {
                     throw ValidationException::withMessages([
-                        'status' => 'Seller balance is currently insufficient to mark this payout as paid.',
+                        'status' => 'Requester balance is currently insufficient to mark this payout as paid.',
                     ]);
                 }
 
-                $sellerProfile->increment('total_paid', (float) $lockedPayout->amount);
+                if ($lockedPayout->isDeliverymanRequest()) {
+                    $requester->increment('delivery_paid_total', (float) $lockedPayout->amount);
+                } else {
+                    $requester->sellerProfile->increment('total_paid', (float) $lockedPayout->amount);
+                }
 
                 $lockedPayout->update([
                     'status' => 'paid',
@@ -577,14 +597,14 @@ class AdminController extends Controller
                 ]);
             });
 
-            $payoutRequest->refresh()->loadMissing('seller');
+            $payoutRequest->refresh()->loadMissing('requester');
 
-            if ($payoutRequest->seller) {
+            if ($payoutRequest->requester) {
                 $this->notifyUsers(
-                    [$payoutRequest->seller],
+                    [$payoutRequest->requester],
                     'Payout paid',
                     "Your payout request of Tk ".number_format((float) $payoutRequest->amount, 0)." has been marked as paid.",
-                    route('seller.payouts.index'),
+                    $payoutRequest->isDeliverymanRequest() ? route('deliveryman.payouts.index') : route('seller.payouts.index'),
                     'success'
                 );
             }
@@ -597,19 +617,19 @@ class AdminController extends Controller
             'processed_at' => now(),
         ]);
 
-        $payoutRequest->loadMissing('seller');
+        $payoutRequest->loadMissing('requester');
 
-        if ($payoutRequest->seller) {
+        if ($payoutRequest->requester) {
             $notificationTitle = $targetStatus === 'approved' ? 'Payout approved' : 'Payout rejected';
             $notificationBody = $targetStatus === 'approved'
                 ? "Your payout request of Tk ".number_format((float) $payoutRequest->amount, 0)." has been approved."
                 : "Your payout request of Tk ".number_format((float) $payoutRequest->amount, 0)." has been rejected.";
 
             $this->notifyUsers(
-                [$payoutRequest->seller],
+                [$payoutRequest->requester],
                 $notificationTitle,
                 $notificationBody,
-                route('seller.payouts.index'),
+                $payoutRequest->isDeliverymanRequest() ? route('deliveryman.payouts.index') : route('seller.payouts.index'),
                 $targetStatus === 'approved' ? 'info' : 'warning'
             );
         }
@@ -624,6 +644,12 @@ class AdminController extends Controller
             ->latest()
             ->paginate(12);
 
+        $deliverymen = User::query()
+            ->where('role', 'deliveryman')
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->get(['id', 'name', 'phone']);
+
         $returnRequests = ReturnRequest::query()
             ->with(['orderItem.order', 'orderItem.seller', 'user', 'pointTransaction'])
             ->latest()
@@ -637,11 +663,22 @@ class AdminController extends Controller
             ->take(25)
             ->get();
 
-        return view('admin.orders.index', compact('orders', 'returnRequests', 'pointConversions'));
+        return view('admin.orders.index', compact('orders', 'deliverymen', 'returnRequests', 'pointConversions'));
     }
 
     public function showOrder(Order $order): View
     {
+        if (! $order->admin_seen_at) {
+            $seenAt = now();
+
+            DB::table('orders')
+                ->where('id', $order->id)
+                ->whereNull('admin_seen_at')
+                ->update(['admin_seen_at' => $seenAt]);
+
+            $order->forceFill(['admin_seen_at' => $seenAt]);
+        }
+
         $order->load([
             'user',
             'items.seller',
@@ -717,10 +754,18 @@ class AdminController extends Controller
             ]);
         }
 
+        if (
+            ! $order->admin_seen_at
+            && ($mappedUpdates['status'] !== 'processing' || $mappedUpdates['delivery_status'] !== 'processing')
+        ) {
+            $mappedUpdates['admin_seen_at'] = now();
+        }
+
         $itemUpdates = [
             'status' => $status,
             'delivery_status' => $status,
         ];
+        $returnRestockItemIds = collect();
 
         if ($status === 'delivered') {
             $itemUpdates['delivered_at'] = now();
@@ -734,8 +779,25 @@ class AdminController extends Controller
             }
         }
 
+        if ($status === 'returned') {
+            $returnRestockItemIds = $order->items()
+                ->whereNotIn('delivery_status', ['returned', 'cancelled'])
+                ->pluck('id');
+        }
+
         $order->items()->update($itemUpdates);
         $order->update($mappedUpdates);
+        $order->refresh();
+
+        if ($status === 'delivered') {
+            $this->creditDeliverymanEarningsForDeliveredOrder($order);
+        } else {
+            $this->reverseDeliverymanEarningsForOrder($order);
+        }
+
+        if ($status === 'returned') {
+            $this->restockReturnedOrderItems($returnRestockItemIds);
+        }
 
         if ($status === 'returned' && ! $order->purchasedWithPoints()) {
             $returnRequests = ReturnRequest::query()
@@ -766,6 +828,7 @@ class AdminController extends Controller
         if ($status === 'approved') {
             $pointTransaction = $pointsWallet->creditReturnRefund($returnRequest);
             $returnRequest->refresh()->load('user', 'orderItem.order');
+            $this->restockReturnedOrderItems([$returnRequest->orderItem]);
             $order = $returnRequest->orderItem?->order;
             $points = (int) ($pointTransaction?->points ?? 0);
 
@@ -960,6 +1023,9 @@ class AdminController extends Controller
 
     public function deliverymenIndex(): View
     {
+        $deliveryChargeSettings = DeliveryChargeService::settings();
+        $deliveryChargeOptions = DeliveryChargeService::options();
+
         $deliverymen = User::query()
             ->where('role', 'deliveryman')
             ->latest()
@@ -978,7 +1044,28 @@ class AdminController extends Controller
             ->take(20)
             ->get();
 
-        return view('admin.deliverymen.index', compact('deliverymen', 'assignedDeliveries', 'completedDeliveries'));
+        return view('admin.deliverymen.index', compact(
+            'deliveryChargeSettings',
+            'deliveryChargeOptions',
+            'deliverymen',
+            'assignedDeliveries',
+            'completedDeliveries'
+        ));
+    }
+
+    public function updateDeliverySettings(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'standard_delivery_charge' => ['required', 'integer', 'min:0', 'max:999999'],
+            'express_delivery_charge' => ['required', 'integer', 'min:0', 'max:999999'],
+        ]);
+
+        DeliveryChargeService::save(
+            (float) $validated['standard_delivery_charge'],
+            (float) $validated['express_delivery_charge']
+        );
+
+        return back()->with('success', 'Delivery charges updated successfully.');
     }
 
     public function storeDeliveryman(Request $request): RedirectResponse
@@ -1115,7 +1202,7 @@ class AdminController extends Controller
             'specifications_text' => ['nullable', 'string'],
             'attributes_text' => ['nullable', 'string'],
             'base_price' => ['required', 'numeric', 'min:0'],
-            'sale_price' => ['nullable', 'numeric', 'min:0'],
+            'sale_price' => ['nullable', 'numeric', 'min:0', 'lte:base_price'],
             'discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'stock_quantity' => ['required', 'integer', 'min:0'],
             'low_stock_threshold' => ['nullable', 'integer', 'min:0'],
@@ -1127,6 +1214,8 @@ class AdminController extends Controller
             'is_flash_deal' => ['nullable', 'boolean'],
             'images' => ['nullable', 'array'],
             'images.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
+        ], [
+            'sale_price.lte' => 'Sale Price can never be greater than Base Price',
         ]);
 
         $selectedSubcategory = Category::query()

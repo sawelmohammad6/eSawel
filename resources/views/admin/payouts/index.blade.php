@@ -44,7 +44,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Seller</th>
+                        <th>Requester</th>
                         <th>Amount</th>
                         <th>Method</th>
                         <th>Account Details</th>
@@ -65,8 +65,10 @@
                         @endphp
                         <tr>
                             <td>
-                                <p class="font-semibold text-slate-800">{{ $requestItem->seller?->sellerProfile->shop_name ?? $requestItem->seller?->name ?? '-' }}</p>
-                                <p class="text-xs text-slate-500">{{ $requestItem->seller?->email ?? '-' }}</p>
+                                <p class="font-semibold text-slate-800">
+                                    {{ $requestItem->isDeliverymanRequest() ? ($requestItem->requester?->name ?? '-') : ($requestItem->requester?->sellerProfile?->shop_name ?? $requestItem->requester?->name ?? '-') }}
+                                </p>
+                                <p class="text-xs text-slate-500">{{ ucfirst((string) $requestItem->requester_role) }} | {{ $requestItem->requester?->email ?? '-' }}</p>
                             </td>
                             <td>Tk {{ number_format((float) $requestItem->amount, 0) }}</td>
                             <td>{{ strtoupper((string) $requestItem->method) }}</td>
@@ -98,7 +100,7 @@
                                             <button class="btn-outline" type="submit">Reject</button>
                                         </form>
                                     @elseif ((string) $requestItem->status === 'approved')
-                                        <form action="{{ route('admin.payouts.update', $requestItem) }}" method="POST" onsubmit="return confirm('Mark this payout as paid? This will reduce seller available balance.')">
+                                        <form action="{{ route('admin.payouts.update', $requestItem) }}" method="POST" onsubmit="return confirm('Mark this payout as paid? This will reduce available balance.')">
                                             @csrf
                                             @method('PATCH')
                                             <input type="hidden" name="status" value="paid">

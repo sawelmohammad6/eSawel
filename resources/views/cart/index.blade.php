@@ -69,7 +69,7 @@
                 @endforelse
             </div>
 
-            <aside class="market-card h-fit p-6">
+            <aside class="market-card h-fit p-6" data-cart-summary data-cart-shipping-amount="{{ (float) $estimatedShippingAmount }}">
                 <h2 class="text-2xl font-black">Cart Summary</h2>
                 <div class="mt-6 space-y-3 text-sm text-slate-600">
                     <div class="flex items-center justify-between">
@@ -82,7 +82,11 @@
                     </div>
                     <div class="flex items-center justify-between">
                         <span>Estimated shipping</span>
-                        <span>Tk 60+</span>
+                        <span>Tk {{ number_format($estimatedShippingAmount, 0) }}</span>
+                    </div>
+                    <div class="flex items-center justify-between pt-2 text-base">
+                        <span>Total</span>
+                        <span class="font-black text-slate-900" data-cart-total>Tk {{ number_format($estimatedCartTotal, 0) }}</span>
                     </div>
                 </div>
                 <a href="{{ route('checkout.index') }}" class="btn-primary mt-6 w-full text-center">Proceed to Checkout</a>

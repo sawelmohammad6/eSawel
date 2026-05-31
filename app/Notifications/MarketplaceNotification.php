@@ -14,6 +14,7 @@ class MarketplaceNotification extends Notification
         protected string $body,
         protected ?string $url = null,
         protected string $kind = 'info',
+        protected array $metadata = [],
     ) {
     }
 
@@ -24,11 +25,11 @@ class MarketplaceNotification extends Notification
 
     public function toArray(object $notifiable): array
     {
-        return [
+        return array_merge([
             'title' => $this->title,
             'body' => $this->body,
             'url' => $this->url,
             'kind' => $this->kind,
-        ];
+        ], $this->metadata);
     }
 }

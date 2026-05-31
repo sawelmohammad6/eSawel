@@ -28,6 +28,8 @@ class User extends Authenticatable
         'status',
         'avatar',
         'reward_points_balance',
+        'delivery_earnings_total',
+        'delivery_paid_total',
     ];
 
     /**
@@ -52,6 +54,8 @@ class User extends Authenticatable
             'last_login_at' => 'datetime',
             'password' => 'hashed',
             'reward_points_balance' => 'integer',
+            'delivery_earnings_total' => 'decimal:2',
+            'delivery_paid_total' => 'decimal:2',
         ];
     }
 
@@ -98,6 +102,11 @@ class User extends Authenticatable
     public function payoutRequests(): HasMany
     {
         return $this->hasMany(PayoutRequest::class, 'seller_id');
+    }
+
+    public function deliveryPayoutRequests(): HasMany
+    {
+        return $this->hasMany(PayoutRequest::class, 'seller_id')->where('requester_role', 'deliveryman');
     }
 
     public function assignedDeliveryItems(): HasMany

@@ -4,11 +4,17 @@
     <section class="shell">
         <div class="mb-6">
             <p class="section-kicker">Deliveryman Panel</p>
-            <h1 class="section-title">Assigned Deliveries</h1>
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <h1 class="section-title">Assigned Deliveries</h1>
+                <a href="{{ route('deliveryman.payouts.index') }}" class="btn-outline">Payouts</a>
+            </div>
         </div>
 
         <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             @foreach ([
+                ['Total Earnings', 'Tk '.number_format($totalEarnings, 0)],
+                ['Available Balance', 'Tk '.number_format($availableBalance, 0)],
+                ['Delivered Orders', number_format((int) $totalDeliveredOrders)],
                 ['Assigned', $stats['assigned']],
                 ['Out for Delivery', $stats['out_for_delivery']],
                 ['Delivered', $stats['delivered']],
@@ -16,9 +22,26 @@
             ] as [$label, $value])
                 <div class="market-card p-5">
                     <p class="section-kicker">{{ $label }}</p>
-                    <p class="mt-4 text-4xl font-black">{{ number_format((int) $value) }}</p>
+                    <p class="mt-4 text-4xl font-black">{{ is_numeric($value) ? number_format((int) $value) : $value }}</p>
                 </div>
             @endforeach
+        </div>
+
+        <div class="mt-8 market-card p-6">
+            <h2 class="text-2xl font-black">Earnings History</h2>
+            <div class="mt-4 space-y-3">
+                @forelse ($earningsHistory as $earning)
+                    <div class="flex flex-wrap items-center justify-between gap-3 rounded-[22px] bg-[#fff7fa] p-4">
+                        <div>
+                            <p class="font-black">{{ data_get($earning->metadata, 'order_number', 'Order') }}</p>
+                            <p class="text-sm text-slate-500">{{ optional($earning->created_at)->format('d M Y, g:i A') ?? '-' }}</p>
+                        </div>
+                        <span class="font-black text-brand-rose">Tk {{ number_format((float) data_get($earning->metadata, 'amount', 0), 0) }}</span>
+                    </div>
+                @empty
+                    <p class="text-sm text-slate-500">No delivery earnings yet.</p>
+                @endforelse
+            </div>
         </div>
 
         <div class="mt-8 table-shell">

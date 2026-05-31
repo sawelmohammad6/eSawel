@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Model;
@@ -27,6 +28,7 @@ class Order extends Model
         'shipping_amount',
         'total_amount',
         'notes',
+        'admin_seen_at',
         'placed_at',
         'estimated_delivery_at',
         'delivered_at',
@@ -41,6 +43,7 @@ class Order extends Model
             'discount_amount' => 'decimal:2',
             'shipping_amount' => 'decimal:2',
             'total_amount' => 'decimal:2',
+            'admin_seen_at' => 'datetime',
             'placed_at' => 'datetime',
             'estimated_delivery_at' => 'datetime',
             'delivered_at' => 'datetime',
@@ -76,6 +79,21 @@ class Order extends Model
     public function pointTransactions(): HasMany
     {
         return $this->hasMany(PointTransaction::class);
+    }
+
+    public function scopeNewForAdmin(Builder $query): Builder
+    {
+        return $query
+            ->whereNull('admin_seen_at')
+            ->where('status', 'processing')
+            ->where('delivery_status', 'processing');
+    }
+
+    public function isNewForAdmin(): bool
+    {
+        return ! $this->admin_seen_at
+            && $this->status === 'processing'
+            && $this->delivery_status === 'processing';
     }
 
     public function purchasedWithPoints(): bool

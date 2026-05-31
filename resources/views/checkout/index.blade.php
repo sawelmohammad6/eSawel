@@ -36,7 +36,7 @@
                             @foreach ($addresses as $address)
                                 <label class="block rounded-[24px] border border-[#ffd6e5] p-4">
                                     <div class="flex items-start gap-3">
-                                        <input type="radio" name="address_id" value="{{ $address->id }}" @checked($loop->first)>
+                                        <input type="radio" name="address_id" value="{{ $address->id }}" data-checkout-address @checked((string) old('address_id', $addresses->first()?->id) === (string) $address->id)>
                                         <div>
                                             <p class="font-black">{{ $address->label }} - {{ $address->recipient_name }}</p>
                                             <p class="text-sm text-slate-500">{{ $address->address_line_1 }}, {{ $address->city }}</p>
@@ -48,25 +48,28 @@
                     </div>
 
                     <div>
-                        <h2 class="text-2xl font-black">Or Add New Address</h2>
+                        <label class="flex items-center gap-3">
+                            <input type="radio" name="address_id" value="" data-checkout-address @checked(old('address_id', $addresses->isEmpty() ? '' : null) === '')>
+                            <span class="text-2xl font-black text-slate-950">Or Add New Address</span>
+                        </label>
                         <div class="mt-4 grid gap-4 md:grid-cols-2">
-                            <input class="field" type="text" name="recipient_name" placeholder="Recipient name">
-                            <input class="field" type="text" name="phone" placeholder="Phone number">
-                            <input class="field md:col-span-2" type="text" name="address_line_1" placeholder="Address line 1">
-                            <input class="field" type="text" name="address_line_2" placeholder="Address line 2">
-                            <input class="field" type="text" name="city" placeholder="City">
-                            <input class="field" type="text" name="state" placeholder="State">
-                            <input class="field" type="text" name="postal_code" placeholder="Postal code">
-                            <input class="field" type="text" name="country" value="Bangladesh" placeholder="Country">
+                            <input class="field" type="text" name="recipient_name" value="{{ old('recipient_name') }}" placeholder="Recipient name">
+                            <input class="field" type="text" name="phone" value="{{ old('phone') }}" placeholder="Phone number">
+                            <input class="field md:col-span-2" type="text" name="address_line_1" value="{{ old('address_line_1') }}" placeholder="Address line 1">
+                            <input class="field" type="text" name="address_line_2" value="{{ old('address_line_2') }}" placeholder="Address line 2">
+                            <input class="field" type="text" name="city" value="{{ old('city') }}" placeholder="City">
+                            <input class="field" type="text" name="state" value="{{ old('state') }}" placeholder="State">
+                            <input class="field" type="text" name="postal_code" value="{{ old('postal_code') }}" placeholder="Postal code">
+                            <input class="field" type="text" name="country" value="{{ old('country', 'Bangladesh') }}" placeholder="Country">
                         </div>
                     </div>
 
                     <div class="grid gap-4 md:grid-cols-2">
                         <div>
                             <h2 class="mb-3 text-2xl font-black">Delivery Method</h2>
-                            <select class="field" name="delivery_method">
-                                <option value="standard">Standard</option>
-                                <option value="express">Express</option>
+                            <select class="field" name="delivery_method" data-checkout-delivery-method>
+                                <option value="standard">Standard - Tk {{ number_format((float) $defaultShippingOptions['standard'], 0) }}</option>
+                                <option value="express">Express - Tk {{ number_format((float) $defaultShippingOptions['express'], 0) }}</option>
                             </select>
                         </div>
                         <div>
@@ -104,7 +107,13 @@
                 </div>
             </form>
 
-            <aside class="market-card h-fit p-6">
+            <aside
+                class="market-card h-fit p-6"
+                data-checkout-summary
+                data-checkout-subtotal="{{ (float) $cart->subtotal }}"
+                data-default-shipping='@json($defaultShippingOptions)'
+                data-address-shipping='@json($addressShippingOptions)'
+            >
                 <h2 class="text-2xl font-black">Order Summary</h2>
                 <div class="mt-6 space-y-4">
                     @foreach ($cart->items as $item)
@@ -126,7 +135,11 @@
                     </div>
                     <div class="flex items-center justify-between">
                         <span>Shipping</span>
-                        <span>Calculated at order time</span>
+                        <span data-checkout-shipping>Tk {{ number_format($checkoutShippingAmount, 0) }}</span>
+                    </div>
+                    <div class="flex items-center justify-between pt-2 text-base">
+                        <span>Total</span>
+                        <span class="font-black text-slate-900" data-checkout-total>Tk {{ number_format($checkoutTotal, 0) }}</span>
                     </div>
                 </div>
             </aside>

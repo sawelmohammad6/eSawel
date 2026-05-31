@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Product;
+use App\Services\DeliveryChargeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -26,8 +27,10 @@ class CartController extends Controller
         }
 
         $cart = $this->cart($request)->load('items.product.images');
+        $estimatedShippingAmount = DeliveryChargeService::amount(null, 'standard');
+        $estimatedCartTotal = (float) $cart->subtotal + $estimatedShippingAmount;
 
-        return view('cart.index', compact('cart'));
+        return view('cart.index', compact('cart', 'estimatedShippingAmount', 'estimatedCartTotal'));
     }
 
     public function store(Request $request, Product $product): RedirectResponse

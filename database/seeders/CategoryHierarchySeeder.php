@@ -20,6 +20,7 @@ class CategoryHierarchySeeder extends Seeder
             'Women Fashion' => [
                 'Women Bottom Wear',
                 'Women Fashion Accessories',
+                'Women Topwear',
                 'Women Footwear',
             ],
             'Kids' => [

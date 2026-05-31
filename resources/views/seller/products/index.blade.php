@@ -43,7 +43,7 @@
                 <h1 class="mt-2 text-3xl font-black">{{ $editingProduct ? 'Edit Product' : 'Add Product' }}</h1>
                 <p class="mt-3 text-sm text-slate-600">Choose a <strong class="text-slate-800">parent category</strong>, then a <strong class="text-slate-800">subcategory</strong>, and optional <strong class="text-slate-800">brand</strong> from the admin catalog.</p>
 
-                <form action="{{ $formAction }}" method="POST" enctype="multipart/form-data" class="mt-6 space-y-4">
+                <form action="{{ $formAction }}" method="POST" enctype="multipart/form-data" class="mt-6 space-y-4" data-product-pricing-form>
                     @csrf
                     @if ($editingProduct)
                         @method('PUT')
@@ -110,8 +110,11 @@
                     </div>
 
                     <div class="grid grid-cols-2 gap-3">
-                        <input class="field" type="number" step="0.01" name="base_price" value="{{ old('base_price', $editingProduct->base_price ?? '') }}" placeholder="Base price">
-                        <input class="field" type="number" step="0.01" name="sale_price" value="{{ old('sale_price', $editingProduct->sale_price ?? '') }}" placeholder="Sale price">
+                        <input class="field" type="number" step="0.01" name="base_price" value="{{ old('base_price', $editingProduct->base_price ?? '') }}" placeholder="Base price" data-base-price-input>
+                        <div>
+                            <input class="field" type="number" step="0.01" name="sale_price" value="{{ old('sale_price', $editingProduct->sale_price ?? '') }}" placeholder="Sale price" data-sale-price-input>
+                            <p class="mt-1 hidden text-xs font-semibold text-red-600" data-sale-price-error>Sale Price can never be greater than Base Price</p>
+                        </div>
                         <input class="field" type="number" step="0.01" min="0" max="100" name="discount_percentage" value="{{ old('discount_percentage', $editingDiscountPercentage) }}" placeholder="Discount % (e.g. 10)">
                         <div>
                             <label for="seller-stock-quantity" class="mb-1 block text-sm font-bold text-slate-800">Stock Quantity</label>

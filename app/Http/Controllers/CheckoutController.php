@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Payment;
 use App\Models\User;
+use App\Services\DeliveryChargeService;
 use App\Services\PointWalletService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -36,12 +37,28 @@ class CheckoutController extends Controller
 
         $addresses = $request->user()->addresses()->latest()->get();
 
-        $pointBalance = (int) $request->user()->reward_points_balance;
-        $pointCheckoutEstimate = (int) round(
-            (float) $cart->subtotal + ($addresses->first() ? $this->shippingAmount($addresses->first(), 'standard') : 0)
-        );
+        $defaultShippingOptions = DeliveryChargeService::options();
+        $checkoutShippingAmount = (float) $defaultShippingOptions['standard'];
+        $checkoutTotal = (float) $cart->subtotal + $checkoutShippingAmount;
+        $addressShippingOptions = $addresses
+            ->mapWithKeys(fn (Address $address): array => [
+                $address->id => $defaultShippingOptions,
+            ])
+            ->all();
 
-        return view('checkout.index', compact('cart', 'addresses', 'pointBalance', 'pointCheckoutEstimate'));
+        $pointBalance = (int) $request->user()->reward_points_balance;
+        $pointCheckoutEstimate = (int) round($checkoutTotal);
+
+        return view('checkout.index', compact(
+            'cart',
+            'addresses',
+            'pointBalance',
+            'pointCheckoutEstimate',
+            'checkoutShippingAmount',
+            'checkoutTotal',
+            'defaultShippingOptions',
+            'addressShippingOptions',
+        ));
     }
 
     public function store(Request $request, PointWalletService $pointsWallet): RedirectResponse
@@ -82,9 +99,25 @@ class CheckoutController extends Controller
             ]);
         }
 
-        $address = $validated['address_id']
-            ? $user->addresses()->findOrFail($validated['address_id'])
+        $addressId = $request->filled('address_id') ? (int) $validated['address_id'] : null;
+        $hasNewAddressInput = collect(['recipient_name', 'phone', 'address_line_1', 'city'])
+            ->contains(fn (string $field): bool => filled($request->input($field)));
+
+        if (! $addressId && ! $hasNewAddressInput) {
+            throw ValidationException::withMessages([
+                'address' => 'Please give your address first.',
+            ]);
+        }
+
+        $address = $addressId
+            ? $user->addresses()->whereKey($addressId)->first()
             : $this->createAddressFromCheckout($request);
+
+        if (! $address) {
+            throw ValidationException::withMessages([
+                'address' => 'Please give your address first.',
+            ]);
+        }
 
         $subtotal = (float) $cart->items->sum(fn ($item) => $item->total);
         $shippingAmount = $this->shippingAmount($address, $validated['delivery_method']);
@@ -222,11 +255,27 @@ class CheckoutController extends Controller
             return redirect()->away($gatewayUrl);
         }
 
-        $sellerUsers = $order->items->pluck('seller')->filter()->unique('id')->values();
         $admins = User::query()->whereIn('role', ['admin', 'sub_admin'])->get();
 
         $this->notifyUsers([$user], 'Order placed', "Your order {$order->order_number} has been placed successfully.", route('orders.show', $order), 'success');
-        $this->notifyUsers($sellerUsers, 'New order received', 'A new order includes items from your shop.', route('seller.orders.index'), 'info');
+        foreach ($order->items as $orderItem) {
+            if (! $orderItem->seller) {
+                continue;
+            }
+
+            $this->notifyUsers(
+                [$orderItem->seller],
+                'New order received',
+                "A new order includes {$orderItem->product_name} from your shop.",
+                route('seller.orders.index'),
+                'info',
+                [
+                    'category' => 'seller_new_order',
+                    'order_id' => $order->id,
+                    'order_item_id' => $orderItem->id,
+                ]
+            );
+        }
         $this->notifyUsers($admins, 'New marketplace order', "Order {$order->order_number} was placed.", route('admin.orders.index'), 'info');
 
         $this->logActivity($user, 'order.created', 'Customer placed an order.', $order, [
@@ -298,7 +347,7 @@ class CheckoutController extends Controller
             $order->update(['payment_status' => 'paid']);
             $this->applySellerEarningsForOrder($order);
 
-            $sellerUsers = $order->items()->with('seller')->get()->pluck('seller')->filter()->unique('id')->values();
+            $orderItems = $order->items()->with('seller')->get();
             $admins = User::query()->whereIn('role', ['admin', 'sub_admin'])->get();
             $orderUser = $order->user;
 
@@ -306,7 +355,24 @@ class CheckoutController extends Controller
                 $this->notifyUsers([$orderUser], 'Payment successful', "Your payment for {$order->order_number} was successful.", route('orders.show', $order), 'success');
             }
 
-            $this->notifyUsers($sellerUsers, 'New paid order received', 'A paid order includes items from your shop.', route('seller.orders.index'), 'info');
+            foreach ($orderItems as $orderItem) {
+                if (! $orderItem->seller) {
+                    continue;
+                }
+
+                $this->notifyUsers(
+                    [$orderItem->seller],
+                    'New paid order received',
+                    "A paid order includes {$orderItem->product_name} from your shop.",
+                    route('seller.orders.index'),
+                    'info',
+                    [
+                        'category' => 'seller_new_order',
+                        'order_id' => $order->id,
+                        'order_item_id' => $orderItem->id,
+                    ]
+                );
+            }
             $this->notifyUsers($admins, 'New paid marketplace order', "Order {$order->order_number} was paid successfully.", route('admin.orders.index'), 'info');
         }
 
@@ -397,9 +463,7 @@ class CheckoutController extends Controller
 
     protected function shippingAmount(Address $address, string $deliveryMethod): float
     {
-        $base = str_contains(strtolower($address->city), 'dhaka') ? 60 : 120;
-
-        return $deliveryMethod === 'express' ? $base + 80 : $base;
+        return DeliveryChargeService::amount((string) $address->city, $deliveryMethod);
     }
 
     protected function resolveCoupon(?string $couponCode, float $subtotal): array

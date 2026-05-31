@@ -10,6 +10,55 @@
         </div>
 
         <div class="market-card p-6">
+            <div class="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                    <h2 class="text-2xl font-black">Delivery Charge Settings</h2>
+                </div>
+                <div class="rounded-[22px] bg-[var(--color-brand-soft)] px-4 py-3 text-sm font-semibold text-slate-700">
+                    Standard Tk {{ number_format((float) $deliveryChargeOptions['standard'], 0) }} | Express Tk {{ number_format((float) $deliveryChargeOptions['express'], 0) }}
+                </div>
+            </div>
+
+            <form action="{{ route('admin.delivery-settings.update') }}" method="POST" class="mt-5 grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
+                @csrf
+                @method('PUT')
+                <label class="block">
+                    <span class="mb-2 block text-sm font-bold text-slate-700">Standard Delivery Charge</span>
+                    <input
+                        class="field"
+                        type="number"
+                        name="standard_delivery_charge"
+                        min="0"
+                        step="1"
+                        value="{{ old('standard_delivery_charge', number_format((float) $deliveryChargeSettings['standard_delivery_charge'], 0, '.', '')) }}"
+                        required
+                    >
+                    @error('standard_delivery_charge')
+                        <span class="mt-1 block text-sm font-semibold text-red-600">{{ $message }}</span>
+                    @enderror
+                </label>
+
+                <label class="block">
+                    <span class="mb-2 block text-sm font-bold text-slate-700">Express Delivery Charge</span>
+                    <input
+                        class="field"
+                        type="number"
+                        name="express_delivery_charge"
+                        min="0"
+                        step="1"
+                        value="{{ old('express_delivery_charge', number_format((float) $deliveryChargeSettings['express_delivery_charge'], 0, '.', '')) }}"
+                        required
+                    >
+                    @error('express_delivery_charge')
+                        <span class="mt-1 block text-sm font-semibold text-red-600">{{ $message }}</span>
+                    @enderror
+                </label>
+
+                <button class="btn-primary" type="submit">Save Charges</button>
+            </form>
+        </div>
+
+        <div class="market-card p-6">
             <h2 class="text-2xl font-black">Create Deliveryman</h2>
             <form action="{{ route('admin.deliverymen.store') }}" method="POST" class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 @csrf

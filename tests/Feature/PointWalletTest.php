@@ -73,16 +73,28 @@ class PointWalletTest extends TestCase
         $admin = $this->user('Return Admin', 'return-admin@example.com', 'admin');
         $customer = $this->user('Returned Customer', 'returned@example.com');
         $seller = $this->user('Return Seller', 'return-seller@example.com', 'seller');
+        $product = Product::query()->create([
+            'seller_id' => $seller->id,
+            'name' => 'Returned Product',
+            'slug' => 'returned-product',
+            'sku' => 'RET-3540',
+            'base_price' => 3540,
+            'stock_quantity' => 2,
+            'status' => 'published',
+            'approval_status' => 'approved',
+            'approved_at' => now(),
+        ]);
         $order = $this->paidOrder($customer);
         $item = OrderItem::query()->create([
             'order_id' => $order->id,
+            'product_id' => $product->id,
             'seller_id' => $seller->id,
             'product_name' => 'Returned Product',
             'sku' => 'RET-3540',
-            'quantity' => 1,
+            'quantity' => 10,
             'unit_price' => 3540,
             'discount_amount' => 0,
-            'total_price' => 3540,
+            'total_price' => 35400,
             'status' => 'delivered',
             'delivery_status' => 'delivered',
             'delivered_at' => now(),
@@ -91,7 +103,7 @@ class PointWalletTest extends TestCase
             'order_item_id' => $item->id,
             'user_id' => $customer->id,
             'reason' => 'Damaged',
-            'refund_amount' => 3540,
+            'refund_amount' => 35400,
             'status' => 'pending',
         ]);
 
@@ -103,7 +115,8 @@ class PointWalletTest extends TestCase
             ->patch(route('admin.orders.update', $order), ['status' => 'returned'])
             ->assertSessionHas('success', 'Return approved. Refund converted to reward points.');
 
-        $this->assertSame(3540, (int) $customer->refresh()->reward_points_balance);
+        $this->assertSame(35400, (int) $customer->refresh()->reward_points_balance);
+        $this->assertSame(12, (int) $product->refresh()->stock_quantity);
         $this->assertDatabaseHas('return_requests', [
             'id' => $returnRequest->id,
             'status' => 'approved',
@@ -113,8 +126,8 @@ class PointWalletTest extends TestCase
             'order_id' => $order->id,
             'return_request_id' => $returnRequest->id,
             'type' => 'return_credit',
-            'points' => 3540,
-            'balance_after' => 3540,
+            'points' => 35400,
+            'balance_after' => 35400,
         ]);
         $this->assertSame(1, \App\Models\PointTransaction::query()
             ->where('return_request_id', $returnRequest->id)
@@ -177,13 +190,13 @@ class PointWalletTest extends TestCase
 
         $this->assertSame('points', $order->payment_method);
         $this->assertSame('paid', $order->payment_status);
-        $this->assertSame(940, (int) $customer->refresh()->reward_points_balance);
+        $this->assertSame(880, (int) $customer->refresh()->reward_points_balance);
         $this->assertDatabaseHas('point_transactions', [
             'user_id' => $customer->id,
             'order_id' => $order->id,
             'type' => 'point_purchase',
-            'points' => -1060,
-            'balance_after' => 940,
+            'points' => -1120,
+            'balance_after' => 880,
         ]);
         $this->assertDatabaseMissing('cart_items', ['cart_id' => $cart->id]);
         $this->assertSame(4, (int) $product->refresh()->stock_quantity);

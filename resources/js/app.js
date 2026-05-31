@@ -12,6 +12,43 @@ const debounce = (callback, wait = 250) => {
 document.addEventListener('DOMContentLoaded', () => {
     const drawer = document.querySelector('[data-category-drawer]');
 
+    document.querySelectorAll('[data-table-scroll-pair]').forEach((wrapper) => {
+        const topScroll = wrapper.querySelector('[data-scroll-top]');
+        const bodyScroll = wrapper.querySelector('[data-scroll-body]');
+        const spacer = wrapper.querySelector('[data-scroll-spacer]');
+        const table = bodyScroll?.querySelector('table');
+
+        if (!topScroll || !bodyScroll || !spacer || !table) {
+            return;
+        }
+
+        const syncSpacerWidth = () => {
+            spacer.style.width = `${table.scrollWidth}px`;
+        };
+
+        let isSyncing = false;
+        const syncScroll = (source, target) => {
+            if (isSyncing) {
+                return;
+            }
+
+            isSyncing = true;
+            target.scrollLeft = source.scrollLeft;
+            window.requestAnimationFrame(() => {
+                isSyncing = false;
+            });
+        };
+
+        topScroll.addEventListener('scroll', () => syncScroll(topScroll, bodyScroll));
+        bodyScroll.addEventListener('scroll', () => syncScroll(bodyScroll, topScroll));
+        syncSpacerWidth();
+        window.addEventListener('resize', syncSpacerWidth);
+
+        if (window.ResizeObserver) {
+            new ResizeObserver(syncSpacerWidth).observe(table);
+        }
+    });
+
     document.querySelectorAll('[data-drawer-open]').forEach((button) => {
         button.addEventListener('click', () => {
             drawer?.classList.remove('hidden');
@@ -182,6 +219,76 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleSellerFields();
     });
 
+    document.querySelectorAll('[data-product-pricing-form]').forEach((form) => {
+        const basePriceInput = form.querySelector('[data-base-price-input]');
+        const salePriceInput = form.querySelector('[data-sale-price-input]');
+        const salePriceError = form.querySelector('[data-sale-price-error]');
+        const submitButton = form.querySelector('button[type="submit"]');
+        let lastValidSalePrice = '';
+
+        if (!basePriceInput || !salePriceInput || !salePriceError) {
+            return;
+        }
+
+        const showSalePriceError = () => {
+            salePriceError.classList.remove('hidden');
+            salePriceInput.setCustomValidity('Sale Price can never be greater than Base Price');
+        };
+
+        const hideSalePriceError = () => {
+            salePriceError.classList.add('hidden');
+            salePriceInput.setCustomValidity('');
+        };
+
+        const isInvalidSalePrice = () => {
+            const basePrice = Number(basePriceInput.value);
+            const salePrice = Number(salePriceInput.value);
+
+            return basePriceInput.value !== ''
+                && salePriceInput.value !== ''
+                && Number.isFinite(basePrice)
+                && Number.isFinite(salePrice)
+                && salePrice > basePrice;
+        };
+
+        const syncPriceState = () => {
+            const invalid = isInvalidSalePrice();
+            submitButton?.toggleAttribute('disabled', invalid);
+
+            if (invalid) {
+                showSalePriceError();
+                return;
+            }
+
+            hideSalePriceError();
+            lastValidSalePrice = salePriceInput.value;
+        };
+
+        salePriceInput.addEventListener('input', () => {
+            if (isInvalidSalePrice()) {
+                salePriceInput.value = lastValidSalePrice;
+                salePriceError.classList.remove('hidden');
+                salePriceInput.setCustomValidity('');
+                submitButton?.toggleAttribute('disabled', false);
+                return;
+            }
+
+            syncPriceState();
+        });
+
+        basePriceInput.addEventListener('input', syncPriceState);
+
+        form.addEventListener('submit', (event) => {
+            if (isInvalidSalePrice()) {
+                event.preventDefault();
+                showSalePriceError();
+                salePriceInput.focus();
+            }
+        });
+
+        syncPriceState();
+    });
+
     document.querySelectorAll('[data-cart-quantity-form]').forEach((form) => {
         const input = form.querySelector('[data-cart-quantity-input]');
         const warningSelector = form.getAttribute('data-warning-target') || '';
@@ -288,6 +395,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     subtotalElement.textContent = `Tk ${formatCurrency(payload.subtotal)}`;
                 }
 
+                const cartSummary = document.querySelector('[data-cart-summary]');
+                const cartTotalElement = document.querySelector('[data-cart-total]');
+                if (cartSummary && cartTotalElement) {
+                    const shippingAmount = Number(cartSummary.getAttribute('data-cart-shipping-amount') || 0);
+                    cartTotalElement.textContent = `Tk ${formatCurrency(Number(payload.subtotal || 0) + shippingAmount)}`;
+                }
+
                 const itemsCountElement = document.querySelector('[data-cart-items-count]');
                 if (itemsCountElement) {
                     itemsCountElement.textContent = String(payload.items_count ?? itemsCountElement.textContent);
@@ -302,25 +416,55 @@ document.addEventListener('DOMContentLoaded', () => {
         input.addEventListener('change', syncQuantity);
     });
 
-    document.querySelectorAll('[data-payout-auto-refresh]').forEach((wrapper) => {
-        const interval = Number(wrapper.getAttribute('data-payout-refresh-interval') || 20000);
+    document.querySelectorAll('[data-checkout-summary]').forEach((summary) => {
+        const formatCurrency = (amount) => new Intl.NumberFormat('en-US').format(Math.round(Number(amount || 0)));
+        const subtotal = Number(summary.getAttribute('data-checkout-subtotal') || 0);
+        const shippingElement = summary.querySelector('[data-checkout-shipping]');
+        const totalElement = summary.querySelector('[data-checkout-total]');
+        const methodSelect = document.querySelector('[data-checkout-delivery-method]');
+        const addressInputs = document.querySelectorAll('[data-checkout-address]');
+        let defaultShipping = {};
+        let addressShipping = {};
 
-        if (!Number.isFinite(interval) || interval < 5000) {
-            return;
+        try {
+            defaultShipping = JSON.parse(summary.getAttribute('data-default-shipping') || '{}');
+        } catch {
+            defaultShipping = {};
         }
 
-        window.setInterval(() => {
-            const active = document.activeElement;
-            const isEditing = !!active
-                && wrapper.contains(active)
-                && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName);
+        try {
+            addressShipping = JSON.parse(summary.getAttribute('data-address-shipping') || '{}');
+        } catch {
+            addressShipping = {};
+        }
 
-            if (isEditing) {
-                return;
+        const selectedAddressId = () => {
+            const selected = Array.from(addressInputs).find((input) => input.checked);
+
+            return selected ? String(selected.value || '') : '';
+        };
+
+        const syncCheckoutTotal = () => {
+            const method = String(methodSelect?.value || 'standard');
+            const addressId = selectedAddressId();
+            const presetShipping = addressShipping[addressId]?.[method];
+            const shipping = typeof presetShipping === 'number'
+                ? presetShipping
+                : Number(defaultShipping[method] || defaultShipping.standard || 0);
+            const total = subtotal + shipping;
+
+            if (shippingElement) {
+                shippingElement.textContent = `Tk ${formatCurrency(shipping)}`;
             }
 
-            window.location.reload();
-        }, interval);
+            if (totalElement) {
+                totalElement.textContent = `Tk ${formatCurrency(total)}`;
+            }
+        };
+
+        methodSelect?.addEventListener('change', syncCheckoutTotal);
+        addressInputs.forEach((input) => input.addEventListener('change', syncCheckoutTotal));
+        syncCheckoutTotal();
     });
 
     document.querySelectorAll('[data-search-box]').forEach((wrapper) => {

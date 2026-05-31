@@ -160,6 +160,7 @@
                     <p class="line"><strong>Order Date:</strong> {{ $orderDate ?? '-' }}</p>
                     <p class="line"><strong>Payment Status:</strong> <span class="badge">{{ ucfirst((string) $order->payment_status) }}</span></p>
                     <p class="line"><strong>Delivery Status:</strong> {{ ucfirst(str_replace('_', ' ', (string) $order->delivery_status)) }}</p>
+                    <p class="line"><strong>Delivery Method:</strong> {{ ucfirst(str_replace('_', ' ', (string) $order->delivery_method)) }}</p>
                     @if ($latestPayment)
                         <p class="line"><strong>Transaction ID:</strong> {{ $latestPayment->transaction_id }}</p>
                     @endif

@@ -106,6 +106,8 @@ Route::prefix('deliveryman')
     ->group(function (): void {
         Route::get('/dashboard', [DeliverymanController::class, 'dashboard'])->name('dashboard');
         Route::patch('/orders/items/{orderItem}', [DeliverymanController::class, 'updateOrderItem'])->name('orders.update');
+        Route::get('/payouts', [DeliverymanController::class, 'payoutsIndex'])->name('payouts.index');
+        Route::post('/payouts', [DeliverymanController::class, 'storePayout'])->name('payouts.store');
     });
 
 Route::prefix('admin')
@@ -141,6 +143,7 @@ Route::prefix('admin')
         Route::patch('/deliveries/items/{orderItem}/assign', [AdminController::class, 'assignDeliveryman'])->name('deliveries.assign');
 
         Route::get('/deliverymen', [AdminController::class, 'deliverymenIndex'])->name('deliverymen.index');
+        Route::put('/delivery-settings', [AdminController::class, 'updateDeliverySettings'])->name('delivery-settings.update');
         Route::post('/deliverymen', [AdminController::class, 'storeDeliveryman'])->name('deliverymen.store');
         Route::put('/deliverymen/{user}', [AdminController::class, 'updateDeliveryman'])->name('deliverymen.update');
         Route::delete('/deliverymen/{user}', [AdminController::class, 'destroyDeliveryman'])->name('deliverymen.destroy');

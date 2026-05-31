@@ -2,6 +2,7 @@
     $linkClass = static fn (string $pattern): string => request()->routeIs($pattern)
         ? 'panel-link panel-link--active'
         : 'panel-link';
+    $sellerNewOrdersCount = $sellerNewOrdersCount ?? 0;
 @endphp
 
 <aside class="panel-sidebar">
@@ -11,7 +12,14 @@
     <nav class="mt-5 space-y-2" aria-label="Seller navigation">
         <a href="{{ route('seller.dashboard') }}" class="{{ $linkClass('seller.dashboard') }}">Dashboard</a>
         <a href="{{ route('seller.products.index') }}" class="{{ $linkClass('seller.products.*') }}">Products</a>
-        <a href="{{ route('seller.orders.index') }}" class="{{ $linkClass('seller.orders.*') }}">Orders</a>
+        <a href="{{ route('seller.orders.index') }}" class="{{ $linkClass('seller.orders.*') }}">
+            <span class="flex items-center justify-between gap-2">
+                <span>Orders</span>
+                @if ($sellerNewOrdersCount > 0)
+                    <span class="rounded-full bg-red-500 px-2 py-0.5 text-xs font-black text-white">{{ $sellerNewOrdersCount }} New</span>
+                @endif
+            </span>
+        </a>
         <a href="{{ route('seller.payouts.index') }}" class="{{ $linkClass('seller.payouts.*') }}">Payouts</a>
     </nav>
 </aside>

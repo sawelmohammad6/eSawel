@@ -240,9 +240,9 @@
                             <div class="rounded-[22px] bg-[#fff7fa] p-4">
                                 <div class="flex flex-wrap items-center justify-between gap-3">
                                     <div>
-                                        <p class="font-black">{{ $payoutRequest->seller?->sellerProfile->shop_name ?? $payoutRequest->seller?->name ?? '-' }}</p>
+                                        <p class="font-black">{{ $payoutRequest->isDeliverymanRequest() ? ($payoutRequest->requester?->name ?? '-') : ($payoutRequest->requester?->sellerProfile?->shop_name ?? $payoutRequest->requester?->name ?? '-') }}</p>
                                         <p class="text-sm text-slate-500">
-                                            {{ strtoupper((string) $payoutRequest->method) }} | {{ optional($payoutRequest->created_at)->format('d M Y, g:i A') ?? '-' }}
+                                            {{ ucfirst((string) $payoutRequest->requester_role) }} | {{ strtoupper((string) $payoutRequest->method) }} | {{ optional($payoutRequest->created_at)->format('d M Y, g:i A') ?? '-' }}
                                         </p>
                                     </div>
                                     <span class="font-black text-brand-rose">Tk {{ number_format((float) $payoutRequest->amount, 0) }}</span>

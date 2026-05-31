@@ -62,6 +62,7 @@ class SellerController extends Controller
         return view('seller.dashboard', [
             'productsCount' => $productsCount,
             'ordersCount' => $ordersCount,
+            'sellerNewOrdersCount' => $this->sellerNewOrdersCount($seller),
             'revenue' => $revenue,
             'monthlyRevenue' => $monthlyRevenue,
             'yearlyRevenue' => $yearlyRevenue,
@@ -138,14 +139,18 @@ class SellerController extends Controller
 
     public function ordersIndex(Request $request): View
     {
+        $seller = $request->user();
+        $sellerNewOrderItemIds = $this->sellerNewOrderItemIds($seller);
+        $sellerNewOrdersCount = $sellerNewOrderItemIds->count();
+
         $orderItems = OrderItem::query()
-            ->where('seller_id', $request->user()->id)
+            ->where('seller_id', $seller->id)
             ->with('order.user', 'product', 'deliveryman')
             ->latest()
             ->paginate(12);
 
         $returnRequests = ReturnRequest::query()
-            ->whereHas('orderItem', fn ($query) => $query->where('seller_id', $request->user()->id))
+            ->whereHas('orderItem', fn ($query) => $query->where('seller_id', $seller->id))
             ->with(['orderItem.order', 'orderItem.seller', 'user'])
             ->latest()
             ->get();
@@ -156,7 +161,7 @@ class SellerController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'phone']);
 
-        return view('seller.orders.index', compact('orderItems', 'returnRequests', 'deliverymen'));
+        return view('seller.orders.index', compact('orderItems', 'sellerNewOrderItemIds', 'sellerNewOrdersCount', 'returnRequests', 'deliverymen'));
     }
 
     public function showOrderItem(Request $request, OrderItem $orderItem): View
@@ -199,6 +204,10 @@ class SellerController extends Controller
             'status' => $status,
             'delivery_status' => $status,
         ]);
+
+        if ($status === 'packed') {
+            $this->markSellerOrderItemNotificationHandled($request->user(), $orderItem);
+        }
 
         $this->syncOrderFromItems($orderItem->order);
 
@@ -250,7 +259,11 @@ class SellerController extends Controller
 
     public function payoutsIndex(Request $request): View
     {
-        $payouts = $request->user()->payoutRequests()->latest()->paginate(10);
+        $payouts = $request->user()
+            ->payoutRequests()
+            ->where('requester_role', 'seller')
+            ->latest()
+            ->paginate(10);
         $availableBalance = max(0, (float) optional($request->user()->sellerProfile)->total_earnings - (float) optional($request->user()->sellerProfile)->total_paid);
 
         return view('seller.payouts.index', compact('payouts', 'availableBalance'));
@@ -270,7 +283,7 @@ class SellerController extends Controller
             (float) optional($seller->sellerProfile)->total_earnings - (float) optional($seller->sellerProfile)->total_paid
         );
 
-        if ($seller->payoutRequests()->where('status', 'pending')->exists()) {
+        if ($seller->payoutRequests()->where('requester_role', 'seller')->where('status', 'pending')->exists()) {
             throw ValidationException::withMessages([
                 'amount' => 'You already have a pending payout request. Please wait for admin review.',
             ]);
@@ -285,6 +298,7 @@ class SellerController extends Controller
         }
 
         $seller->payoutRequests()->create([
+            'requester_role' => 'seller',
             'amount' => $requestedAmount,
             'method' => $request->input('method'),
             'details' => ['account_details' => $request->input('account_details')],
@@ -334,7 +348,7 @@ class SellerController extends Controller
             'specifications_text' => ['nullable', 'string'],
             'attributes_text' => ['nullable', 'string'],
             'base_price' => ['required', 'numeric', 'min:0'],
-            'sale_price' => ['nullable', 'numeric', 'min:0'],
+            'sale_price' => ['nullable', 'numeric', 'min:0', 'lte:base_price'],
             'discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'stock_quantity' => ['required', 'integer', 'min:0'],
             'low_stock_threshold' => ['nullable', 'integer', 'min:0'],
@@ -345,6 +359,8 @@ class SellerController extends Controller
             'is_flash_deal' => ['nullable', 'boolean'],
             'images' => ['nullable', 'array'],
             'images.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
+        ], [
+            'sale_price.lte' => 'Sale Price can never be greater than Base Price',
         ]);
 
         $selectedSubcategory = Category::query()
